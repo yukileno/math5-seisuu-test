@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小5算数 整数マスター - 類題特化ドリル</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ヘッダー -->
+    <header class="main-header">
+      <div class="header-top">
+        <div class="logo">
+          <span class="badge-grade">小学5年 算数</span>
+          <h1>整数マスター 類題ドリル</h1>
+        </div>
+        <div class="stats-bar">
+          <div class="stat-item combo">
+            <span class="stat-label">れんぞく正解</span>
+            <span class="stat-val" id="comboCount">0</span>
+            <span class="stat-unit">問</span>
+          </div>
+          <div class="stat-item total">
+            <span class="stat-label">といた数</span>
+            <span class="stat-val" id="totalSolved">0</span>
+            <span class="stat-unit">問</span>
+          </div>
+          <div class="stat-item rate">
+            <span class="stat-label">正解率</span>
+            <span class="stat-val" id="correctRate">100</span>
+            <span class="stat-unit">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- カテゴリータブ -->
+      <nav class="category-nav">
+        <button class="cat-btn active" data-category="all">🌟 ぜんぶ</button>
+        <button class="cat-btn" data-category="even_odd">① 偶数・奇数</button>
+        <button class="cat-btn" data-category="multiple">② 倍数・公倍数</button>
+        <button class="cat-btn" data-category="divisor">③ 約数・公約数</button>
+        <button class="cat-btn" data-category="word">④ 文章題（応用）</button>
+      </nav>
+    </header>
+
+    <!-- メイン問題表示エリア -->
+    <main class="quiz-main">
+      <div class="card question-card" id="questionCard">
+        <div class="card-header">
+          <span class="question-badge" id="categoryBadge">カテゴリ</span>
+          <span class="question-tag" id="skillBadge">知識・技能</span>
+        </div>
+
+        <div class="question-body">
+          <div class="question-instruction" id="questionInstruction">問題文がここに入ります</div>
+          <div class="question-subtext" id="questionSubtext" style="display:none;"></div>
+          
+          <!-- 入力フォームエリア -->
+          <form id="answerForm" onsubmit="return false;">
+            <div class="input-container" id="inputContainer">
+              <!-- 動的に入力フィールドが生成されます -->
+            </div>
+
+            <!-- 操作ボタン -->
+            <div class="action-buttons">
+              <button type="submit" id="submitBtn" class="btn btn-primary">
+                <span>こたえあわせ！</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 判定結果・考え方表示エリア（解答後に表示） -->
+        <div class="result-container" id="resultContainer" style="display:none;">
+          <div class="result-banner" id="resultBanner">
+            <div class="result-icon" id="resultIcon">⭕</div>
+            <div class="result-text" id="resultText">せいかい！よくできました！</div>
+          </div>
+
+          <!-- 正解の表示（間違えた場合やすべての場合） -->
+          <div class="correct-answer-box" id="correctAnswerBox">
+            <div class="box-title">正解（こたえ）</div>
+            <div class="box-content" id="correctAnswerContent"></div>
+          </div>
+
+          <!-- テスト用紙と同じ「考え方」ボックス -->
+          <div class="explanation-box" id="explanationBox">
+            <div class="box-title">
+              <span class="bulb-icon">💡</span> 考え方
+            </div>
+            <div class="box-content" id="explanationContent">
+              <!-- 考え方の解説が入る -->
+            </div>
+          </div>
+
+          <div class="next-action">
+            <button type="button" id="nextBtn" class="btn btn-next">
+              <span>つぎの問題へ ⏩</span>
+              <span class="key-hint">（Enterキーでも進めます）</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- フッター -->
+    <footer class="main-footer">
+      <p>※テスト原本の数字は出題されません。同じパターンの類題でしっかり実力をつけましょう！</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
