@@ -18,25 +18,31 @@
           <span class="badge-grade">小学5年 算数</span>
           <h1>整数マスター 類題ドリル</h1>
         </div>
-        <div class="stats-bar">
-          <div class="stat-item combo">
-            <span class="stat-label">れんぞく正解</span>
-            <div class="combo-num-wrap">
-              <span class="stat-val" id="comboCount">0</span>
-              <span class="stat-unit">/ 10問</span>
+        <div class="header-right">
+          <div class="stats-bar">
+            <div class="stat-item combo">
+              <span class="stat-label">れんぞく正解</span>
+              <div class="combo-num-wrap">
+                <span class="stat-val" id="comboCount">0</span>
+                <span class="stat-unit" id="comboUnit">/ 10問</span>
+              </div>
+              <span class="tetris-hint" id="tetrisHint">あと10問でテトリス🎮</span>
             </div>
-            <span class="tetris-hint" id="tetrisHint">あと10問でテトリス🎮</span>
+            <div class="stat-item total">
+              <span class="stat-label">といた数</span>
+              <span class="stat-val" id="totalSolved">0</span>
+              <span class="stat-unit">問</span>
+            </div>
+            <div class="stat-item rate">
+              <span class="stat-label">正解率</span>
+              <span class="stat-val" id="correctRate">100</span>
+              <span class="stat-unit">%</span>
+            </div>
           </div>
-          <div class="stat-item total">
-            <span class="stat-label">といた数</span>
-            <span class="stat-val" id="totalSolved">0</span>
-            <span class="stat-unit">問</span>
-          </div>
-          <div class="stat-item rate">
-            <span class="stat-label">正解率</span>
-            <span class="stat-val" id="correctRate">100</span>
-            <span class="stat-unit">%</span>
-          </div>
+          <button type="button" class="btn-toggle-tetris on" id="toggleTetrisBtn" title="ごほうびテトリスのON/OFFを切り替えます">
+            <span class="toggle-icon" id="toggleIcon">🎮</span>
+            <span class="toggle-label" id="toggleLabel">テトリス: <strong>ON</strong></span>
+          </button>
         </div>
       </div>
 
@@ -111,6 +117,7 @@
         <span>🎮 テトリスをスタート！（2分間）</span>
       </button>
       <button class="btn-text-only" id="skipTetrisBtn">いまは勉強をつづける ✏️</button>
+      <button class="btn-text-only text-muted" id="disableTetrisFromModalBtn" style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">（テトリスをOFFにして集中モードにする）</button>
     </div>
   </div>
 

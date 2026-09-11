@@ -1339,13 +1339,20 @@ class MathDrillApp {
     this.combo = 0;
     this.totalSolved = 0;
     this.totalCorrect = 0;
+    this.isTetrisEnabled = true;
     this.loadSavedStats();
 
     // DOM要素
     this.comboEl = document.getElementById('comboCount');
+    this.comboUnitEl = document.getElementById('comboUnit');
     this.tetrisHintEl = document.getElementById('tetrisHint');
     this.solvedEl = document.getElementById('totalSolved');
     this.rateEl = document.getElementById('correctRate');
+
+    // テトリス設定トグル
+    this.toggleTetrisBtn = document.getElementById('toggleTetrisBtn');
+    this.toggleIcon = document.getElementById('toggleIcon');
+    this.toggleLabel = document.getElementById('toggleLabel');
 
     this.instructionEl = document.getElementById('questionInstruction');
     this.subtextEl = document.getElementById('questionSubtext');
@@ -1364,6 +1371,7 @@ class MathDrillApp {
     this.tetrisUnlockModal = document.getElementById('tetrisUnlockModal');
     this.startTetrisBtn = document.getElementById('startTetrisBtn');
     this.skipTetrisBtn = document.getElementById('skipTetrisBtn');
+    this.disableTetrisFromModalBtn = document.getElementById('disableTetrisFromModalBtn');
 
     // テトリスゲーム初期化（終了時に呼ばれるコールバックを渡す）
     this.tetris = new TetrisGame(() => {
@@ -1372,18 +1380,19 @@ class MathDrillApp {
     });
 
     this.initEvents();
+    this.updateTetrisToggleUI();
     this.updateStats();
     this.loadNextQuestion();
 
-    // スリープ復帰時、既に10問正解に達していればテトリス解放モーダルを表示
-    if (this.combo >= 10) {
+    // スリープ復帰時、既に10問正解に達していてテトリスONなら解放モーダルを表示
+    if (this.combo >= 10 && this.isTetrisEnabled) {
       setTimeout(() => {
         this.tetrisUnlockModal.style.display = 'flex';
       }, 400);
     }
   }
 
-  // 端末（LocalStorage）から成績・連続正解数を読み込み
+  // 端末（LocalStorage）から成績・連続正解数・設定を読み込み
   loadSavedStats() {
     try {
       const raw = localStorage.getItem('math_drill_stats');
@@ -1393,6 +1402,8 @@ class MathDrillApp {
         if (typeof data.totalSolved === 'number') this.totalSolved = Math.max(0, data.totalSolved);
         if (typeof data.totalCorrect === 'number') this.totalCorrect = Math.max(0, data.totalCorrect);
       }
+      const tetrisSetting = localStorage.getItem('math_drill_tetris_enabled');
+      this.isTetrisEnabled = tetrisSetting === null ? true : (tetrisSetting === 'true');
     } catch (e) {}
   }
 
@@ -1405,10 +1416,50 @@ class MathDrillApp {
         totalCorrect: this.totalCorrect
       };
       localStorage.setItem('math_drill_stats', JSON.stringify(stats));
+      localStorage.setItem('math_drill_tetris_enabled', String(this.isTetrisEnabled));
     } catch (e) {}
   }
 
+  // テトリスごほうび機能のON/OFF切り替え
+  toggleTetris(forceState) {
+    this.isTetrisEnabled = forceState !== undefined ? forceState : !this.isTetrisEnabled;
+    this.saveStats();
+    this.updateTetrisToggleUI();
+    this.updateStats();
+  }
+
+  updateTetrisToggleUI() {
+    if (!this.toggleTetrisBtn) return;
+    if (this.isTetrisEnabled) {
+      this.toggleTetrisBtn.className = 'btn-toggle-tetris on';
+      if (this.toggleIcon) this.toggleIcon.textContent = '🎮';
+      if (this.toggleLabel) this.toggleLabel.innerHTML = 'テトリス: <strong>ON</strong>';
+      if (this.comboUnitEl) this.comboUnitEl.textContent = '/ 10問';
+    } else {
+      this.toggleTetrisBtn.className = 'btn-toggle-tetris off';
+      if (this.toggleIcon) this.toggleIcon.textContent = '✏️';
+      if (this.toggleLabel) this.toggleLabel.innerHTML = 'テトリス: <strong>OFF</strong>';
+      if (this.comboUnitEl) this.comboUnitEl.textContent = '問連続';
+    }
+  }
+
   initEvents() {
+    // テトリスON/OFFトグルボタン
+    if (this.toggleTetrisBtn) {
+      this.toggleTetrisBtn.addEventListener('click', () => {
+        this.toggleTetris();
+      });
+    }
+
+    // 解放モーダル内の「テトリスOFFにして集中する」ボタン
+    if (this.disableTetrisFromModalBtn) {
+      this.disableTetrisFromModalBtn.addEventListener('click', () => {
+        this.toggleTetris(false);
+        this.tetrisUnlockModal.style.display = 'none';
+        this.loadNextQuestion();
+      });
+    }
+
     // フォーム送信（こたえあわせ）
     document.getElementById('answerForm').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1656,8 +1707,8 @@ class MathDrillApp {
 
     this.showResult(allCorrect, q.correctText, q.explanation);
 
-    // 10問連続正解達成！
-    if (this.combo >= 10) {
+    // 10問連続正解達成！（テトリスON時のみモーダル表示）
+    if (this.combo >= 10 && this.isTetrisEnabled) {
       setTimeout(() => {
         this.tetrisUnlockModal.style.display = 'flex';
       }, 700);
@@ -1671,9 +1722,13 @@ class MathDrillApp {
     if (isCorrect) {
       this.resultBanner.className = 'result-banner correct';
       this.resultIcon.textContent = '💮';
-      this.resultText.textContent = this.combo >= 10
-        ? `🎉 10問連続正解達成！！テトリス解放！！`
-        : `せいかい！ ${this.combo}問れんぞく正解！`;
+      if (this.combo >= 10 && this.isTetrisEnabled) {
+        this.resultText.textContent = `🎉 10問連続正解達成！！テトリス解放！！`;
+      } else if (this.combo >= 10) {
+        this.resultText.textContent = `👑 すごい！${this.combo}問れんぞく大正解！！`;
+      } else {
+        this.resultText.textContent = `せいかい！ ${this.combo}問れんぞく正解！`;
+      }
     } else {
       this.resultBanner.className = 'result-banner incorrect';
       this.resultIcon.textContent = '❌';
@@ -1688,11 +1743,19 @@ class MathDrillApp {
 
   updateStats() {
     this.comboEl.textContent = this.combo;
-    const remaining = 10 - this.combo;
-    if (remaining > 0) {
-      this.tetrisHintEl.textContent = `あと${remaining}問でテトリス🎮`;
+
+    if (this.isTetrisEnabled) {
+      if (this.comboUnitEl) this.comboUnitEl.textContent = '/ 10問';
+      const remaining = 10 - this.combo;
+      this.tetrisHintEl.style.display = 'inline-block';
+      if (remaining > 0) {
+        this.tetrisHintEl.textContent = `あと${remaining}問でテトリス🎮`;
+      } else {
+        this.tetrisHintEl.textContent = `テトリス解放！🎉`;
+      }
     } else {
-      this.tetrisHintEl.textContent = `テトリス解放！🎉`;
+      if (this.comboUnitEl) this.comboUnitEl.textContent = '問連続';
+      this.tetrisHintEl.style.display = 'none';
     }
 
     this.solvedEl.textContent = this.totalSolved;
