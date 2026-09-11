@@ -1370,14 +1370,6 @@ class MathDrillApp {
       this.loadNextQuestion();
     });
 
-    // テトリス動作確認ボタン（即座にテトリスをテストできる）
-    const testBtn = document.getElementById('testTetrisBtn');
-    if (testBtn) {
-      testBtn.addEventListener('click', () => {
-        this.tetris.start();
-      });
-    }
-
     // キーボード操作（Enterでこたえあわせ／次へ）
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
