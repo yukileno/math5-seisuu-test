@@ -7,3 +7,19 @@ $RECYCLE.BIN/
 
 # Logs
 *.log
+
+# Sensitive original test papers, scans, and images (DO NOT COMMIT)
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.pdf
+*テスト*
+*原本*
+*第*回*
+*第*章*
+*問題*
+*解答*
+scratch/
+
