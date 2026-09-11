@@ -998,8 +998,8 @@ class TetrisGame {
 
 class MathDrillApp {
   constructor() {
-    this.currentCategory = 'all';
     this.currentQuestion = null;
+    this.lastQuestionKey = null;
     this.isAnswered = false;
 
     // 成績データ
@@ -1013,8 +1013,6 @@ class MathDrillApp {
     this.solvedEl = document.getElementById('totalSolved');
     this.rateEl = document.getElementById('correctRate');
 
-    this.categoryBadge = document.getElementById('categoryBadge');
-    this.skillBadge = document.getElementById('skillBadge');
     this.instructionEl = document.getElementById('questionInstruction');
     this.subtextEl = document.getElementById('questionSubtext');
     this.inputContainer = document.getElementById('inputContainer');
@@ -1045,16 +1043,6 @@ class MathDrillApp {
   }
 
   initEvents() {
-    // カテゴリー切り替え
-    document.querySelectorAll('.cat-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.currentCategory = btn.dataset.category;
-        this.loadNextQuestion();
-      });
-    });
-
     // フォーム送信（こたえあわせ）
     document.getElementById('answerForm').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1098,25 +1086,20 @@ class MathDrillApp {
     });
   }
 
-  getGeneratorsForCurrentCategory() {
-    const keys = Object.keys(generators);
-    if (this.currentCategory === 'all') {
-      return keys;
-    }
-    return keys.filter(k => {
-      const q = generators[k]();
-      return q.category === this.currentCategory;
-    });
-  }
-
   loadNextQuestion() {
     this.isAnswered = false;
     this.resultContainer.style.display = 'none';
     this.submitBtn.disabled = false;
     this.submitBtn.style.display = 'inline-flex';
 
-    const availableKeys = this.getGeneratorsForCurrentCategory();
-    const chosenKey = pickRandom(availableKeys);
+    // 常に全問題からランダム出題（同じ問題が連続しないように選択）
+    const allKeys = Object.keys(generators);
+    let chosenKey = pickRandom(allKeys);
+    if (allKeys.length > 1 && chosenKey === this.lastQuestionKey) {
+      const otherKeys = allKeys.filter(k => k !== this.lastQuestionKey);
+      chosenKey = pickRandom(otherKeys);
+    }
+    this.lastQuestionKey = chosenKey;
     this.currentQuestion = generators[chosenKey]();
 
     this.renderQuestion();
@@ -1125,8 +1108,6 @@ class MathDrillApp {
   renderQuestion() {
     const q = this.currentQuestion;
 
-    this.categoryBadge.textContent = q.categoryName;
-    this.skillBadge.textContent = q.skill;
     this.instructionEl.textContent = q.instruction;
 
     if (q.subtext) {
