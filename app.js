@@ -649,6 +649,7 @@ class TetrisGame {
     this.animId = null;
     this.timerId = null;
     this.isPlaying = false;
+    this.isGameOver = false;
 
     this.initEvents();
   }
@@ -660,7 +661,7 @@ class TetrisGame {
   initEvents() {
     // キーボード操作
     window.addEventListener('keydown', (e) => {
-      if (!this.isPlaying) return;
+      if (!this.isPlaying || this.isGameOver) return;
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'c', 'C'].includes(e.key)) {
         e.preventDefault();
       }
@@ -673,14 +674,14 @@ class TetrisGame {
     });
 
     // タッチ操作ボタン
-    document.getElementById('btnLeft').addEventListener('click', () => this.isPlaying && this.move(-1));
-    document.getElementById('btnRight').addEventListener('click', () => this.isPlaying && this.move(1));
-    document.getElementById('btnRotate').addEventListener('click', () => this.isPlaying && this.rotate());
-    document.getElementById('btnDown').addEventListener('click', () => this.isPlaying && this.drop());
+    document.getElementById('btnLeft').addEventListener('click', () => this.isPlaying && !this.isGameOver && this.move(-1));
+    document.getElementById('btnRight').addEventListener('click', () => this.isPlaying && !this.isGameOver && this.move(1));
+    document.getElementById('btnRotate').addEventListener('click', () => this.isPlaying && !this.isGameOver && this.rotate());
+    document.getElementById('btnDown').addEventListener('click', () => this.isPlaying && !this.isGameOver && this.drop());
     const btnHard = document.getElementById('btnHardDrop');
-    if (btnHard) btnHard.addEventListener('click', () => this.isPlaying && this.hardDrop());
+    if (btnHard) btnHard.addEventListener('click', () => this.isPlaying && !this.isGameOver && this.hardDrop());
     const btnHold = document.getElementById('btnHold');
-    if (btnHold) btnHold.addEventListener('click', () => this.isPlaying && this.hold());
+    if (btnHold) btnHold.addEventListener('click', () => this.isPlaying && !this.isGameOver && this.hold());
 
     // 勉強に戻るボタン
     document.getElementById('quitTetrisBtn').addEventListener('click', () => {
@@ -688,11 +689,21 @@ class TetrisGame {
       this.closeGameModal();
     });
 
-    // ゲームオーバー後のリトライ
+    // ゲームオーバー後のリトライ（確実にゲームループとタイマーを再始動）
     document.getElementById('retryTetrisBtn').addEventListener('click', () => {
-      this.resetGame();
       this.gameOverOverlay.style.display = 'none';
+      this.resetGame();
+      this.isGameOver = false;
       this.isPlaying = true;
+      this.lastTime = performance.now();
+      this.dropCounter = 0;
+      cancelAnimationFrame(this.animId);
+      this.gameLoop(performance.now());
+
+      clearInterval(this.timerId);
+      this.timerId = setInterval(() => {
+        this.tickTimer();
+      }, 1000);
     });
 
     // タイムアップ後の算数に戻るボタン
@@ -707,6 +718,7 @@ class TetrisGame {
     this.modal.style.display = 'flex';
     this.gameOverOverlay.style.display = 'none';
     this.timeUpModal.style.display = 'none';
+    this.isGameOver = false;
 
     this.loadSavedState();
 
@@ -733,7 +745,7 @@ class TetrisGame {
   }
 
   tickTimer() {
-    if (!this.isPlaying) return;
+    if (!this.isPlaying || this.isGameOver) return;
     this.timeLeft--;
     this.updateTimerDisplay();
 
@@ -770,6 +782,14 @@ class TetrisGame {
     cancelAnimationFrame(this.animId);
     clearInterval(this.timerId);
 
+    // ゲームオーバー時や上端が埋まっている場合は絶対にセーブを残さない（次回クリーンスタートにする）
+    if (this.isGameOver || (this.grid && this.grid[0].some(cell => cell !== 0))) {
+      try {
+        localStorage.removeItem('saved_tetris_game');
+      } catch (e) {}
+      return;
+    }
+
     const saveData = {
       grid: this.grid,
       score: this.score,
@@ -790,7 +810,7 @@ class TetrisGame {
       const raw = localStorage.getItem('saved_tetris_game');
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.grid && data.grid.length === TETRIS_ROWS) {
+        if (data.grid && data.grid.length === TETRIS_ROWS && !data.grid[0].some(cell => cell !== 0)) {
           this.grid = data.grid;
           this.score = data.score || 0;
           this.lines = data.lines || 0;
@@ -798,18 +818,25 @@ class TetrisGame {
           this.nextPiece = data.nextPiece || this.generatePiece();
           this.holdPiece = data.holdPiece || null;
           this.canHold = data.canHold !== undefined ? data.canHold : true;
-          this.updateStatsUI();
-          this.draw();
-          return;
+          this.dropInterval = Math.max(180, 800 - this.lines * 15);
+          this.isGameOver = false;
+
+          // 復元したピースが衝突していないか安全確認
+          if (!this.collide(this.currentPiece)) {
+            this.updateStatsUI();
+            this.draw();
+            return;
+          }
         }
       }
     } catch (e) {}
 
-    // セーブがなければ新規初期化
+    // セーブが無効、または衝突・ゲームオーバー状態なら新規初期化
     this.resetGame();
   }
 
   resetGame() {
+    this.isGameOver = false;
     this.grid = this.createGrid();
     this.score = 0;
     this.lines = 0;
@@ -817,10 +844,15 @@ class TetrisGame {
     this.nextPiece = this.generatePiece();
     this.holdPiece = null;
     this.canHold = true;
+    this.dropInterval = 800;
+    this.dropCounter = 0;
     this.particles = [];
     this.floatingTexts = [];
     this.updateStatsUI();
     this.draw();
+    try {
+      localStorage.removeItem('saved_tetris_game');
+    } catch (e) {}
   }
 
   generatePiece() {
@@ -1043,7 +1075,10 @@ class TetrisGame {
 
     if (this.collide()) {
       // ゲームオーバー
+      this.isGameOver = true;
       this.isPlaying = false;
+      cancelAnimationFrame(this.animId);
+      clearInterval(this.timerId);
       this.gameOverOverlay.style.display = 'flex';
       try {
         localStorage.removeItem('saved_tetris_game');
