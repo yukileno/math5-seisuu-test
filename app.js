@@ -74,15 +74,6 @@ function normalizeStr(str) {
     .toLowerCase();
 }
 
-// 数値リスト入力（例: "2, 4, 6" や "2 4 6" や "2、4、6"）を整数の配列としてパース
-function parseNumberList(input) {
-  const norm = normalizeStr(input);
-  if (!norm) return [];
-  // カンマまたはスペースで分割
-  const parts = norm.split(/[, ]+/);
-  return parts.map(p => parseInt(p, 10)).filter(n => !isNaN(n));
-}
-
 // 用語の同一視判定（ひらがな、漢字など）
 const termAliases = {
   '偶数': ['偶数', 'ぐうすう', 'グウスウ'],
@@ -103,6 +94,7 @@ function checkTermMatch(userVal, correctTerm) {
 
 // ==========================================
 // 類題生成ジェネレータ群（原本の数値は出題しない）
+// 全て入力枠（マス目）を分けた設計
 // ==========================================
 
 const generators = {
@@ -114,10 +106,16 @@ const generators = {
       skill: '知識・技能',
       instruction: '次の（　）にあてはまることばをかきましょう。',
       subtext: '2でわり切れる整数を（ ① ）、2でわり切れない整数を（ ② ）といいます。',
-      fields: [
-        { id: 'f1', label: '①', type: 'term', correct: '偶数', placeholder: 'ことばを入力' },
-        { id: 'f2', label: '②', type: 'term', correct: '奇数', placeholder: 'ことばを入力' }
+      rows: [
+        {
+          label: '',
+          boxes: [
+            { id: 'f1', prefix: '① （ ', unit: ' ）', type: 'term', correct: '偶数', class: 'input-term', placeholder: 'ことば' },
+            { id: 'f2', prefix: '② （ ', unit: ' ）', type: 'term', correct: '奇数', class: 'input-term', placeholder: 'ことば' }
+          ]
+        }
       ],
+      correctText: '① 偶数、 ② 奇数',
       explanation: '【考え方】\n・2でわり切れる整数（一の位が 0, 2, 4, 6, 8）を「偶数（ぐうすう）」といいます。\n・2でわり切れない整数（一の位が 1, 3, 5, 7, 9）を「奇数（きすう）」といいます。\n※0は2でわり切れるので「偶数」です。'
     };
   },
@@ -132,10 +130,16 @@ const generators = {
       skill: '知識・技能',
       instruction: '次の（　）にあてはまることばをかきましょう。',
       subtext: `${a}の倍数にも、${b}の倍数にもなっている数を、${a}と${b}の（ ① ）といいます。\n公倍数のうち、いちばん小さい数を（ ② ）といいます。`,
-      fields: [
-        { id: 'f1', label: '①', type: 'term', correct: '公倍数', placeholder: 'ことばを入力' },
-        { id: 'f2', label: '②', type: 'term', correct: '最小公倍数', placeholder: 'ことばを入力' }
+      rows: [
+        {
+          label: '',
+          boxes: [
+            { id: 'f1', prefix: '① （ ', unit: ' ）', type: 'term', correct: '公倍数', class: 'input-term', placeholder: 'ことば' },
+            { id: 'f2', prefix: '② （ ', unit: ' ）', type: 'term', correct: '最小公倍数', class: 'input-term', placeholder: 'ことば' }
+          ]
+        }
       ],
+      correctText: '① 公倍数、 ② 最小公倍数',
       explanation: '【考え方】\n・共通する倍数を「公倍数（こうばいすう）」といいます。\n・その中で一番小さい数を「最小公倍数（さいしょうこうばいすう）」といいます。'
     };
   },
@@ -150,22 +154,27 @@ const generators = {
       skill: '知識・技能',
       instruction: '次の（　）にあてはまることばをかきましょう。',
       subtext: `${a}の約数にも、${b}の約数にもなっている数を、${a}と${b}の（ ① ）といいます。\n公約数のうち、いちばん大きい数を（ ② ）といいます。`,
-      fields: [
-        { id: 'f1', label: '①', type: 'term', correct: '公約数', placeholder: 'ことばを入力' },
-        { id: 'f2', label: '②', type: 'term', correct: '最大公約数', placeholder: 'ことばを入力' }
+      rows: [
+        {
+          label: '',
+          boxes: [
+            { id: 'f1', prefix: '① （ ', unit: ' ）', type: 'term', correct: '公約数', class: 'input-term', placeholder: 'ことば' },
+            { id: 'f2', prefix: '② （ ', unit: ' ）', type: 'term', correct: '最大公約数', class: 'input-term', placeholder: 'ことば' }
+          ]
+        }
       ],
+      correctText: '① 公約数、 ② 最大公約数',
       explanation: '【考え方】\n・共通する約数を「公約数（こうやくすう）」といいます。\n・その中で一番大きい数を「最大公約数（さいだいこうやくすう）」といいます。'
     };
   },
 
-  // 2. 偶数・奇数の分類（原本: 222, 57, 43, 96, 0, 11, 27, 100 以外）
+  // 2. 偶数・奇数の分類（マス目を4つずつ分けて配置）
   p2_classify: () => {
-    // 0を含める。偶数3つ、奇数4つ
     const evenPool = [14, 28, 52, 76, 84, 102, 138, 216, 304, 90, 68, 42];
     const oddPool = [13, 25, 37, 49, 63, 71, 85, 99, 105, 127, 203, 319];
     
     const evens = shuffle(evenPool).slice(0, 3);
-    evens.push(0); // 0を必ず入れる（テストの超重要ポイント）
+    evens.push(0); // 0は必ず含める
     const odds = shuffle(oddPool).slice(0, 4);
 
     const allNums = shuffle([...evens, ...odds]);
@@ -174,17 +183,38 @@ const generators = {
       category: 'even_odd',
       categoryName: '偶数・奇数',
       skill: '知識・技能',
-      instruction: '次の整数を見て、偶数と奇数に分けてかきましょう。（順不同・カンマやスペースで区切って入力）',
+      instruction: '次の整数を見て、偶数と奇数に分けて枠に入れましょう。（順不同）',
       chips: allNums,
-      fields: [
-        { id: 'even', label: '・偶数', type: 'num_set', correct: evens, placeholder: '例: 0, 14, 52, 76' },
-        { id: 'odd', label: '・奇数', type: 'num_set', correct: odds, placeholder: '例: 13, 25, 37, 49' }
+      rows: [
+        {
+          label: '・偶数',
+          isMultiSet: true,
+          correctSet: evens,
+          boxes: [
+            { id: 'e0', unit: '、', class: 'input-narrow' },
+            { id: 'e1', unit: '、', class: 'input-narrow' },
+            { id: 'e2', unit: '、', class: 'input-narrow' },
+            { id: 'e3', unit: '', class: 'input-narrow' }
+          ]
+        },
+        {
+          label: '・奇数',
+          isMultiSet: true,
+          correctSet: odds,
+          boxes: [
+            { id: 'o0', unit: '、', class: 'input-narrow' },
+            { id: 'o1', unit: '、', class: 'input-narrow' },
+            { id: 'o2', unit: '、', class: 'input-narrow' },
+            { id: 'o3', unit: '', class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: `偶数: ${evens.sort((a,b)=>a-b).join('、 ')} / 奇数: ${odds.sort((a,b)=>a-b).join('、 ')}`,
       explanation: `【考え方】\n・一の位が 0, 2, 4, 6, 8 の数は偶数です。※「0」は2でわり切れるので偶数です！\n　偶数：${evens.sort((a,b)=>a-b).join('、 ')}\n・一の位が 1, 3, 5, 7, 9 の数は奇数です。\n　奇数：${odds.sort((a,b)=>a-b).join('、 ')}`
     };
   },
 
-  // 3-1. 倍数（小さい順に3つ） 原本の9以外
+  // 3-1. 倍数（小さい順に3つ） 枠を3つに分ける
   p3_multiple_3: () => {
     const base = pickRandom([6, 7, 8, 11, 12, 13, 14, 15]);
     const ans = [base * 1, base * 2, base * 3];
@@ -192,16 +222,24 @@ const generators = {
       category: 'multiple',
       categoryName: '倍数・公倍数',
       skill: '知識・技能',
-      instruction: `次の数を小さい順に3つかきましょう。（カンマやスペースで区切って入力）`,
+      instruction: `次の数を小さい順に3つかきましょう。`,
       subtext: `【 ${base} の倍数 】（小さい順に3つ）`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_seq', correct: ans, placeholder: `例: ${ans[0]}, ${ans[1]}, ${ans[2]}` }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'b0', unit: '、', type: 'single_num', correct: ans[0], class: 'input-narrow' },
+            { id: 'b1', unit: '、', type: 'single_num', correct: ans[1], class: 'input-narrow' },
+            { id: 'b2', unit: '', type: 'single_num', correct: ans[2], class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\n${base}の倍数は、${base}に 1, 2, 3… をかけた数です。\n・${base} × 1 ＝ ${ans[0]}\n・${base} × 2 ＝ ${ans[1]}\n・${base} × 3 ＝ ${ans[2]}`
     };
   },
 
-  // 3-2. 2数の公倍数（小さい順に3つ） 原本の4と5以外
+  // 3-2. 2数の公倍数（小さい順に3つ） 枠を3つに分ける
   p3_common_multiple_2: () => {
     const pairs = [[2, 3], [3, 4], [2, 5], [3, 5], [4, 6], [6, 8], [3, 8]];
     const [a, b] = pickRandom(pairs);
@@ -211,16 +249,24 @@ const generators = {
       category: 'multiple',
       categoryName: '倍数・公倍数',
       skill: '知識・技能',
-      instruction: `次の数を小さい順に3つかきましょう。（カンマやスペースで区切って入力）`,
+      instruction: `次の数を小さい順に3つかきましょう。`,
       subtext: `【 ${a} と ${b} の公倍数 】（小さい順に3つ）`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_seq', correct: ans, placeholder: `例: ${ans[0]}, ${ans[1]}, ${ans[2]}` }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'b0', unit: '、', type: 'single_num', correct: ans[0], class: 'input-narrow' },
+            { id: 'b1', unit: '、', type: 'single_num', correct: ans[1], class: 'input-narrow' },
+            { id: 'b2', unit: '', type: 'single_num', correct: ans[2], class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\n・${a}と${b}の最小公倍数は ${m} です。\n・公倍数は最小公倍数の倍数になるので、${m} × 1 ＝ ${ans[0]}、${m} × 2 ＝ ${ans[1]}、${m} × 3 ＝ ${ans[2]} となります。`
     };
   },
 
-  // 3-3. 3数の公倍数（小さい順に2つ） 原本の2,6,8以外
+  // 3-3. 3数の公倍数（小さい順に2つ） 枠を2つに分ける
   p3_common_multiple_3: () => {
     const triples = [[2, 3, 4], [2, 4, 6], [3, 4, 6], [2, 3, 5], [2, 5, 10]];
     const [a, b, c] = pickRandom(triples);
@@ -230,16 +276,23 @@ const generators = {
       category: 'multiple',
       categoryName: '倍数・公倍数',
       skill: '知識・技能',
-      instruction: `次の数を小さい順に2つかきましょう。（カンマやスペースで区切って入力）`,
+      instruction: `次の数を小さい順に2つかきましょう。`,
       subtext: `【 ${a} と ${b} と ${c} の公倍数 】（小さい順に2つ）`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_seq', correct: ans, placeholder: `例: ${ans[0]}, ${ans[1]}` }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'b0', unit: '、', type: 'single_num', correct: ans[0], class: 'input-narrow' },
+            { id: 'b1', unit: '', type: 'single_num', correct: ans[1], class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\n・一番大きい数 ${c} の倍数の中から、${a}でも${b}でもわり切れる最小の数（最小公倍数）を探すと ${m} です。\n・公倍数は ${m} の倍数なので、${ans[0]}、${ans[1]} となります。`
     };
   },
 
-  // 3-4. 3数の最小公倍数 原本の2,3,7以外
+  // 3-4. 3数の最小公倍数
   p3_lcm_3: () => {
     const triples = [
       [2, 3, 5], // 30
@@ -257,34 +310,52 @@ const generators = {
       skill: '知識・技能',
       instruction: `次の数の最小公倍数をかきましょう。`,
       subtext: `【 ${a} と ${b} と ${c} の最小公倍数 】`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'single_num', correct: ans, placeholder: '数字を入力' }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'ans', unit: '', type: 'single_num', correct: ans, class: 'input-narrow' }
+          ]
+        }
       ],
-      explanation: `【考え方】\n一番大きい数 ${c} の倍数を順に調べて、${a}と${b}でもわり切れるいちばん小さい数を見つけます。\n${a}と${b}と${c}の最小公倍数は ${ans} です。`
+      correctText: String(ans),
+      explanation: `【考え方】\n一番大きい数 ${c} の倍数を順に調べて、${a}と${b}でもわり切れるいちばん小さい数を見つけます。\n${a}と${b}と${c}の最小公倍数は 【 ${ans} 】 です。`
     };
   },
 
-  // 3-5. 1つの数の約数（すべて） 原本の16以外
+  // 3-5. 1つの数の約数（すべて） 個数分の枠に分ける（順不同可）
   p3_divisors_all: () => {
     const pool = [12, 18, 20, 24, 28, 30, 32, 36];
     const n = pickRandom(pool);
     const ans = getDivisors(n);
+    const boxes = ans.map((_, i) => ({
+      id: `d_${i}`,
+      unit: i < ans.length - 1 ? '、' : '',
+      class: 'input-narrow'
+    }));
+
     return {
       category: 'divisor',
       categoryName: '約数・公約数',
       skill: '知識・技能',
-      instruction: `次の数の約数をすべてかきましょう。（カンマやスペースで区切って入力・順不同可）`,
-      subtext: `【 ${n} の約数（すべて） 】`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_set', correct: ans, placeholder: `例: ${ans.join(', ')}` }
+      instruction: `次の数の約数をすべてかきましょう。（順不同・枠に1つずつ入力）`,
+      subtext: `【 ${n} の約数（全部で${ans.length}個） 】`,
+      rows: [
+        {
+          label: '答え',
+          isMultiSet: true,
+          correctSet: ans,
+          boxes: boxes
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\nかけ算のペアで見つけると、もれなく探せます。\n` +
         ans.filter(d => d <= Math.sqrt(n)).map(d => `・${d} × ${n/d} ＝ ${n}`).join('\n') +
         `\nよって、約数はすべてで 【 ${ans.join('、 ')} 】 です。`
     };
   },
 
-  // 3-6. 2数の公約数（すべて） 原本の18と30以外
+  // 3-6. 2数の公約数（すべて） 個数分の枠に分ける（順不同可）
   p3_common_divisors_2: () => {
     const pairs = [
       [12, 18], // 1, 2, 3, 6
@@ -298,20 +369,32 @@ const generators = {
     const divsA = getDivisors(a);
     const divsB = getDivisors(b);
     const ans = getCommonDivisors(a, b);
+    const boxes = ans.map((_, i) => ({
+      id: `cd_${i}`,
+      unit: i < ans.length - 1 ? '、' : '',
+      class: 'input-narrow'
+    }));
+
     return {
       category: 'divisor',
       categoryName: '約数・公約数',
       skill: '知識・技能',
-      instruction: `次の数の公約数をすべてかきましょう。（カンマやスペースで区切って入力・順不同可）`,
-      subtext: `【 ${a} と ${b} の公約数（すべて） 】`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_set', correct: ans, placeholder: `例: ${ans.join(', ')}` }
+      instruction: `次の数の公約数をすべてかきましょう。（順不同・枠に1つずつ入力）`,
+      subtext: `【 ${a} と ${b} の公約数（全部で${ans.length}個） 】`,
+      rows: [
+        {
+          label: '答え',
+          isMultiSet: true,
+          correctSet: ans,
+          boxes: boxes
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\n・${a}の約数は ${divsA.join('、 ')}\n・${b}の約数は ${divsB.join('、 ')}\n両方に共通する約数（公約数）は 【 ${ans.join('、 ')} 】 です。`
     };
   },
 
-  // 3-7. 2数の最大公約数 原本の36と48以外
+  // 3-7. 2数の最大公約数
   p3_gcd_2: () => {
     const pairs = [
       [24, 32], // 8
@@ -330,14 +413,20 @@ const generators = {
       skill: '知識・技能',
       instruction: `次の数の最大公約数をかきましょう。`,
       subtext: `【 ${a} と ${b} の最大公約数 】`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'single_num', correct: ans, placeholder: '数字を入力' }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'ans', unit: '', type: 'single_num', correct: ans, class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: String(ans),
       explanation: `【考え方】\n小さい方の数 ${Math.min(a, b)} の約数のうち、大きい方から順にもう一方の数もわり切れるか調べます。\n最大公約数は 【 ${ans} 】 です。`
     };
   },
 
-  // 3-8. 3数の公約数（すべて） 原本の12,18,27以外
+  // 3-8. 3数の公約数（すべて） 個数分の枠に分ける（順不同可）
   p3_common_divisors_3: () => {
     const triples = [
       [12, 20, 32], // 1, 2, 4
@@ -348,20 +437,32 @@ const generators = {
     ];
     const [a, b, c] = pickRandom(triples);
     const ans = getCommonDivisors3(a, b, c);
+    const boxes = ans.map((_, i) => ({
+      id: `cd3_${i}`,
+      unit: i < ans.length - 1 ? '、' : '',
+      class: 'input-narrow'
+    }));
+
     return {
       category: 'divisor',
       categoryName: '約数・公約数',
       skill: '知識・技能',
-      instruction: `次の数の公約数をすべてかきましょう。（カンマやスペースで区切って入力・順不同可）`,
-      subtext: `【 ${a} と ${b} と ${c} の公約数（すべて） 】`,
-      fields: [
-        { id: 'f1', label: '答え', type: 'num_set', correct: ans, placeholder: `例: ${ans.join(', ')}` }
+      instruction: `次の数の公約数をすべてかきましょう。（順不同・枠に1つずつ入力）`,
+      subtext: `【 ${a} と ${b} と ${c} の公約数（全部で${ans.length}個） 】`,
+      rows: [
+        {
+          label: '答え',
+          isMultiSet: true,
+          correctSet: ans,
+          boxes: boxes
+        }
       ],
+      correctText: ans.join('、 '),
       explanation: `【考え方】\n3つの数すべての公約数は、3つの数の最大公約数（${gcd3(a, b, c)}）の約数と同じです。\n公約数はすべてで 【 ${ans.join('、 ')} 】 です。`
     };
   },
 
-  // 4. 文章題: バスの同時発車（最小公倍数） 原本の12分・16分・午前11時以外
+  // 4. 文章題: バスの同時発車（何時何分で枠を分ける！）
   p4_word_bus: () => {
     const cases = [
       { a: 10, b: 15, h: 9, m: 0, destA: '温泉', destB: '運動公園' }, // LCM=30 -> 9:30
@@ -383,15 +484,21 @@ const generators = {
       categoryName: '文章題（思考・判断・表現）',
       skill: '思考・判断・表現',
       instruction: `駅前からバスが、${c.destA}行きは${c.a}分ごとに、${c.destB}行きは${c.b}分ごとに出発しています。\n${startStr}に同時に出発した後、次に同時に発車するのは、午前何時何分ですか。`,
-      fields: [
-        { id: 'hour', label: '午前', unit: '時', type: 'single_num', correct: ansH, inputClass: 'input-narrow', placeholder: '何' },
-        { id: 'min', label: '', unit: '分', type: 'single_num', correct: ansM, inputClass: 'input-narrow', placeholder: '何' }
+      rows: [
+        {
+          label: '答え',
+          boxes: [
+            { id: 'hour', prefix: '午前 ', unit: '時', type: 'single_num', correct: ansH, class: 'input-narrow', placeholder: '' },
+            { id: 'min', prefix: '', unit: '分', type: 'single_num', correct: ansM, class: 'input-narrow', placeholder: '' }
+          ]
+        }
       ],
+      correctText: `午前 ${ansH} 時 ${ansM} 分`,
       explanation: `【考え方】\n${c.a}と${c.b}の最小公倍数を求めればよいです。\n・${c.a}の倍数は ${c.a}、${c.a*2}、${c.a*3}…\n・${c.b}の倍数は ${c.b}、${c.b*2}、${c.b*3}…\n・${c.a}と${c.b}の最小公倍数は 【 ${period} 】\n${startStr}の${period}分後は、午前${ansH}時${ansM}分 です。`
     };
   },
 
-  // 5. 文章題: 長方形を余りなく正方形に分ける（最大公約数） 原本の24cm・18cm以外
+  // 5. 文章題: 長方形を余りなく正方形に分ける
   p5_word_paper: () => {
     const cases = [
       { w: 30, h: 20 }, // GCD=10, 3*2=6枚
@@ -412,15 +519,28 @@ const generators = {
       categoryName: '文章題（思考・判断・表現）',
       skill: '思考・判断・表現',
       instruction: `たて${c.w}cm、横${c.h}cmの方眼紙があります。これを目もりの線にそって切り、紙の余りが出ないように同じ大きさの正方形に分けたいと思います。`,
-      fields: [
-        { id: 'f1', label: '① できるだけ大きい正方形をつくるとき、1辺は何cmになりますか。', unit: 'cm', type: 'single_num', correct: g, placeholder: '数字' },
-        { id: 'f2', label: '② ①のとき、正方形は何枚できますか。', unit: '枚', type: 'single_num', correct: totalCount, placeholder: '数字' }
+      rows: [
+        {
+          label: '① できるだけ大きい正方形をつくるとき、1辺は何cmになりますか。',
+          isBlock: true,
+          boxes: [
+            { id: 'side', prefix: '1辺の長さ: ', unit: 'cm', type: 'single_num', correct: g, class: 'input-narrow' }
+          ]
+        },
+        {
+          label: '② ①のとき、正方形は何枚できますか。',
+          isBlock: true,
+          boxes: [
+            { id: 'count', prefix: '正方形の数: ', unit: '枚', type: 'single_num', correct: totalCount, class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: `① ${g}cm / ② ${totalCount}枚`,
       explanation: `【考え方】\n① ${c.w}と${c.h}の最大公約数を求めればよいです。\n　最大公約数は 【 ${g} 】 なので、1辺は ${g}cm です。\n② たて…${c.w} ÷ ${g} ＝ ${countW}\n　横…${c.h} ÷ ${g} ＝ ${countH}\n　${countW} × ${countH} ＝ 【 ${totalCount} 】 枚できます。`
     };
   },
 
-  // 6. 文章題: 余りなく袋に分ける（最大公約数） 原本のチョコ32個・あめ72個以外
+  // 6. 文章題: 余りなく袋に分ける（アイテムごとに枠を分ける！）
   p6_word_bags: () => {
     const cases = [
       { itemA: 'クッキー', countA: 40, itemB: 'あめ', countB: 56, unitBag: '枚' }, // GCD=8, 5個, 7個
@@ -439,11 +559,24 @@ const generators = {
       categoryName: '文章題（思考・判断・表現）',
       skill: '思考・判断・表現',
       instruction: `${c.itemA}${c.countA}個と${c.itemB}${c.countB}個を余りが出ないように、それぞれ同じ数ずつ${c.unitBag}に分けます。`,
-      fields: [
-        { id: 'f1', label: `① できるだけ多くの${c.unitBag}に分けるには、${c.unitBag}の数をいくつにすればよいですか。`, unit: c.unitBag, type: 'single_num', correct: g, placeholder: '数字' },
-        { id: 'f2_a', label: `② ①のとき、1つの${c.unitBag}に入る${c.itemA}は`, unit: '個', type: 'single_num', correct: eachA, inputClass: 'input-narrow', placeholder: '数' },
-        { id: 'f2_b', label: `、${c.itemB}は`, unit: '個です。', type: 'single_num', correct: eachB, inputClass: 'input-narrow', placeholder: '数' }
+      rows: [
+        {
+          label: `① できるだけ多くの${c.unitBag}に分けるには、${c.unitBag}の数をいくつにすればよいですか。`,
+          isBlock: true,
+          boxes: [
+            { id: 'bag', prefix: `${c.unitBag}の数: `, unit: c.unitBag, type: 'single_num', correct: g, class: 'input-narrow' }
+          ]
+        },
+        {
+          label: `② ①のとき、1つの${c.unitBag}に入る${c.itemA}と${c.itemB}は、それぞれいくつですか。`,
+          isBlock: true,
+          boxes: [
+            { id: 'eachA', prefix: `${c.itemA}の数: `, unit: '個、', type: 'single_num', correct: eachA, class: 'input-narrow' },
+            { id: 'eachB', prefix: `${c.itemB}の数: `, unit: '個', type: 'single_num', correct: eachB, class: 'input-narrow' }
+          ]
+        }
       ],
+      correctText: `① ${g}${c.unitBag} / ② ${c.itemA}: ${eachA}個、 ${c.itemB}: ${eachB}個`,
       explanation: `【考え方】\n① ${c.countA}と${c.countB}の最大公約数を求めればよいです。\n　最大公約数は 【 ${g} 】 なので、${g}${c.unitBag}です。\n② それぞれの個数を${c.unitBag}の数でわります。\n　・${c.itemA}…${c.countA} ÷ ${g} ＝ 【 ${eachA} 】 個\n　・${c.itemB}…${c.countB} ÷ ${g} ＝ 【 ${eachB} 】 個`
     };
   }
@@ -584,45 +717,77 @@ class MathDrillApp {
       this.inputContainer.appendChild(chipBox);
     }
 
-    // 入力欄
-    q.fields.forEach((field, index) => {
-      const row = document.createElement('div');
-      row.className = 'input-row';
+    // 行ごとに描画
+    const allInputs = [];
 
-      if (field.label) {
-        const label = document.createElement('span');
-        label.className = 'input-label';
-        label.textContent = field.label;
-        row.appendChild(label);
+    q.rows.forEach(row => {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = row.isBlock ? 'input-row-block' : 'input-row';
+
+      if (row.label) {
+        const labelSpan = document.createElement('div');
+        labelSpan.className = 'input-label';
+        labelSpan.textContent = row.label;
+        rowDiv.appendChild(labelSpan);
       }
 
-      const wrap = document.createElement('div');
-      wrap.className = 'input-field-wrap';
+      const wrapDiv = document.createElement('div');
+      wrapDiv.className = 'multi-box-wrap';
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = `input_${field.id}`;
-      input.className = `math-input ${field.inputClass || (field.type === 'num_set' || field.type === 'num_seq' ? 'input-wide' : '')}`;
-      input.placeholder = field.placeholder || '';
-      input.autocomplete = 'off';
+      row.boxes.forEach(box => {
+        const itemSpan = document.createElement('span');
+        itemSpan.className = 'box-item';
 
-      wrap.appendChild(input);
+        if (box.prefix) {
+          const prefixSpan = document.createElement('span');
+          prefixSpan.className = 'input-unit';
+          prefixSpan.textContent = box.prefix;
+          itemSpan.appendChild(prefixSpan);
+        }
 
-      if (field.unit) {
-        const unit = document.createElement('span');
-        unit.className = 'input-unit';
-        unit.textContent = field.unit;
-        wrap.appendChild(unit);
-      }
+        const fieldWrap = document.createElement('span');
+        fieldWrap.className = 'input-field-wrap';
 
-      row.appendChild(wrap);
-      this.inputContainer.appendChild(row);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `box_${box.id}`;
+        input.className = `math-input ${box.class || ''}`;
+        input.placeholder = box.placeholder || '';
+        input.autocomplete = 'off';
+
+        fieldWrap.appendChild(input);
+        itemSpan.appendChild(fieldWrap);
+
+        if (box.unit) {
+          const unitSpan = document.createElement('span');
+          unitSpan.className = 'input-unit';
+          unitSpan.textContent = box.unit;
+          itemSpan.appendChild(unitSpan);
+        }
+
+        wrapDiv.appendChild(itemSpan);
+        allInputs.push(input);
+      });
+
+      rowDiv.appendChild(wrapDiv);
+      this.inputContainer.appendChild(rowDiv);
+    });
+
+    // 入力欄間の自動フォーカス移動（Enterキーで次へ）
+    allInputs.forEach((inp, idx) => {
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (idx < allInputs.length - 1) {
+            e.preventDefault();
+            allInputs[idx + 1].focus();
+          }
+        }
+      });
     });
 
     // 最初の入力欄にフォーカス
     setTimeout(() => {
-      const firstInput = this.inputContainer.querySelector('input');
-      if (firstInput) firstInput.focus();
+      if (allInputs.length > 0) allInputs[0].focus();
     }, 50);
   }
 
@@ -631,47 +796,65 @@ class MathDrillApp {
     this.isAnswered = true;
     const q = this.currentQuestion;
     let allCorrect = true;
-    const correctStrings = [];
 
-    q.fields.forEach(field => {
-      const inputEl = document.getElementById(`input_${field.id}`);
-      const val = inputEl ? inputEl.value : '';
-      let isFieldCorrect = false;
+    q.rows.forEach(row => {
+      if (row.isMultiSet) {
+        // 順不同の数値セット（例: 偶数・奇数の枠、約数すべての枠）
+        const userVals = [];
+        row.boxes.forEach(box => {
+          const el = document.getElementById(`box_${box.id}`);
+          const v = parseInt(normalizeStr(el ? el.value : ''), 10);
+          if (!isNaN(v)) userVals.push(v);
+        });
 
-      if (field.type === 'term') {
-        isFieldCorrect = checkTermMatch(val, field.correct);
-        correctStrings.push(`${field.label}: ${field.correct}`);
-      } else if (field.type === 'single_num') {
-        const parsed = parseInt(normalizeStr(val), 10);
-        isFieldCorrect = parsed === field.correct;
-        correctStrings.push(`${field.label ? field.label + ': ' : ''}${field.correct}${field.unit || ''}`);
-      } else if (field.type === 'num_seq') {
-        // 小さい順に指定された通りの並び
-        const parsedList = parseNumberList(val);
-        isFieldCorrect = parsedList.length === field.correct.length &&
-          field.correct.every((num, i) => parsedList[i] === num);
-        correctStrings.push(`${field.correct.join('、 ')}`);
-      } else if (field.type === 'num_set') {
-        // 順不同のセット一致
-        const parsedList = parseNumberList(val);
-        const sortedExpected = [...field.correct].sort((a, b) => a - b);
-        const sortedActual = [...parsedList].sort((a, b) => a - b);
-        isFieldCorrect = sortedExpected.length === sortedActual.length &&
-          sortedExpected.every((num, i) => sortedActual[i] === num);
-        correctStrings.push(`${field.label ? field.label + ': ' : ''}${field.correct.sort((a,b)=>a-b).join('、 ')}`);
-      }
+        const expected = [...row.correctSet].sort((a, b) => a - b);
+        const actual = [...userVals].sort((a, b) => a - b);
+        const isMatch = expected.length === actual.length &&
+          expected.every((num, i) => actual[i] === num);
 
-      if (!isFieldCorrect) {
-        allCorrect = false;
-        if (inputEl) {
-          inputEl.parentElement.style.borderColor = '#ef4444';
-          inputEl.parentElement.style.backgroundColor = '#fef2f2';
-        }
+        row.boxes.forEach(box => {
+          const el = document.getElementById(`box_${box.id}`);
+          if (el) {
+            const wrap = el.parentElement;
+            if (isMatch) {
+              wrap.style.borderColor = '#10b981';
+              wrap.style.backgroundColor = '#f0fdf4';
+            } else {
+              wrap.style.borderColor = '#ef4444';
+              wrap.style.backgroundColor = '#fef2f2';
+            }
+          }
+        });
+
+        if (!isMatch) allCorrect = false;
+
       } else {
-        if (inputEl) {
-          inputEl.parentElement.style.borderColor = '#10b981';
-          inputEl.parentElement.style.backgroundColor = '#f0fdf4';
-        }
+        // 各ボックス個別の判定
+        row.boxes.forEach(box => {
+          const el = document.getElementById(`box_${box.id}`);
+          const val = el ? el.value : '';
+          let isBoxCorrect = false;
+
+          if (box.type === 'term') {
+            isBoxCorrect = checkTermMatch(val, box.correct);
+          } else if (box.type === 'single_num') {
+            const parsed = parseInt(normalizeStr(val), 10);
+            isBoxCorrect = parsed === box.correct;
+          }
+
+          if (el) {
+            const wrap = el.parentElement;
+            if (isBoxCorrect) {
+              wrap.style.borderColor = '#10b981';
+              wrap.style.backgroundColor = '#f0fdf4';
+            } else {
+              wrap.style.borderColor = '#ef4444';
+              wrap.style.backgroundColor = '#fef2f2';
+            }
+          }
+
+          if (!isBoxCorrect) allCorrect = false;
+        });
       }
     });
 
@@ -686,7 +869,7 @@ class MathDrillApp {
     this.updateStats();
 
     // 結果表示の更新
-    this.showResult(allCorrect, correctStrings.join(' / '), q.explanation);
+    this.showResult(allCorrect, q.correctText, q.explanation);
   }
 
   showResult(isCorrect, answerStr, explanation) {
