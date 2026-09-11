@@ -819,7 +819,7 @@ body {
   margin-bottom: 6px;
 }
 
-#nextCanvas {
+#nextCanvas, #holdCanvas {
   background: #090d16;
   border-radius: 6px;
   margin: 0 auto;
@@ -840,38 +840,58 @@ body {
 /* タッチ操作ボタン */
 .tetris-touch-controls {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .dpad-left, .dpad-right {
   display: flex;
+  justify-content: center;
   gap: 8px;
 }
 
 .touch-btn {
-  background: #334155;
+  background: #1e293b;
   color: #ffffff;
   border: 2px solid #475569;
   border-radius: 12px;
   font-family: var(--font-family);
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 900;
-  padding: 10px 16px;
+  padding: 10px 14px;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
-  transition: background 0.1s;
+  transition: all 0.15s ease;
+  flex: 1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
 }
 
 .touch-btn:active {
-  background: #4f46e5;
-  border-color: #6366f1;
+  background: #3b82f6;
+  border-color: #60a5fa;
+  transform: translateY(2px);
 }
 
 .touch-btn.btn-action {
+  background: #2e1065;
+  border-color: #7c3aed;
+  color: #ddd6fe;
+}
+
+.touch-btn.btn-action:active {
+  background: #6d28d9;
+}
+
+.touch-btn.btn-harddrop {
+  background: #701a75;
+  border-color: #d946ef;
+  color: #fae8ff;
   font-size: 0.95rem;
-  padding: 10px 14px;
+}
+
+.touch-btn.btn-harddrop:active {
+  background: #c026d3;
 }
 

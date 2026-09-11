@@ -578,21 +578,32 @@ const generators = {
 };
 
 // ==========================================
-// テトリスゲームエンジン (状態セーブ・復元・2分タイマー)
+// 美しいネオンアーケード・テトリスゲームエンジン
+// （ネオングロー、パーティクル爆発、スクリーンシェイク、ゴーストピース、HOLD、状態セーブ・復元対応）
 // ==========================================
 
 const TETRIS_COLS = 10;
 const TETRIS_ROWS = 20;
 const BLOCK_SIZE = 20;
 
+const NEON_COLORS = {
+  I: '#00f0ff', // シアン
+  O: '#ffe600', // イエロー
+  T: '#c026d3', // ネオンマゼンタ
+  S: '#10b981', // エメラルドグリーン
+  Z: '#f43f5e', // ネオンレッド
+  J: '#3b82f6', // コバルトブルー
+  L: '#f97316'  // ネオンオレンジ
+};
+
 const TETROMINOES = {
-  I: { shape: [[1, 1, 1, 1]], color: '#06b6d4' },
-  O: { shape: [[1, 1], [1, 1]], color: '#eab308' },
-  T: { shape: [[0, 1, 0], [1, 1, 1]], color: '#a855f7' },
-  S: { shape: [[0, 1, 1], [1, 1, 0]], color: '#22c55e' },
-  Z: { shape: [[1, 1, 0], [0, 1, 1]], color: '#ef4444' },
-  J: { shape: [[1, 0, 0], [1, 1, 1]], color: '#3b82f6' },
-  L: { shape: [[0, 0, 1], [1, 1, 1]], color: '#f97316' }
+  I: { shape: [[1, 1, 1, 1]], color: NEON_COLORS.I },
+  O: { shape: [[1, 1], [1, 1]], color: NEON_COLORS.O },
+  T: { shape: [[0, 1, 0], [1, 1, 1]], color: NEON_COLORS.T },
+  S: { shape: [[0, 1, 1], [1, 1, 0]], color: NEON_COLORS.S },
+  Z: { shape: [[1, 1, 0], [0, 1, 1]], color: NEON_COLORS.Z },
+  J: { shape: [[1, 0, 0], [1, 1, 1]], color: NEON_COLORS.J },
+  L: { shape: [[0, 0, 1], [1, 1, 1]], color: NEON_COLORS.L }
 };
 
 class TetrisGame {
@@ -603,6 +614,9 @@ class TetrisGame {
 
     this.nextCanvas = document.getElementById('nextCanvas');
     this.nextCtx = this.nextCanvas.getContext('2d');
+
+    this.holdCanvas = document.getElementById('holdCanvas');
+    this.holdCtx = this.holdCanvas ? this.holdCanvas.getContext('2d') : null;
 
     this.timerEl = document.getElementById('tetrisTimer');
     this.scoreEl = document.getElementById('tetrisScore');
@@ -620,6 +634,14 @@ class TetrisGame {
 
     this.currentPiece = null;
     this.nextPiece = null;
+    this.holdPiece = null;
+    this.canHold = true;
+
+    // エフェクト関連
+    this.particles = [];
+    this.floatingTexts = [];
+    this.shakeDuration = 0;
+    this.shakeIntensity = 0;
 
     this.dropCounter = 0;
     this.dropInterval = 800; // ms
@@ -639,7 +661,7 @@ class TetrisGame {
     // キーボード操作
     window.addEventListener('keydown', (e) => {
       if (!this.isPlaying) return;
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'c', 'C'].includes(e.key)) {
         e.preventDefault();
       }
       if (e.key === 'ArrowLeft') this.move(-1);
@@ -647,6 +669,7 @@ class TetrisGame {
       else if (e.key === 'ArrowDown') this.drop();
       else if (e.key === 'ArrowUp') this.rotate();
       else if (e.key === ' ') this.hardDrop();
+      else if (e.key === 'c' || e.key === 'C') this.hold();
     });
 
     // タッチ操作ボタン
@@ -654,6 +677,10 @@ class TetrisGame {
     document.getElementById('btnRight').addEventListener('click', () => this.isPlaying && this.move(1));
     document.getElementById('btnRotate').addEventListener('click', () => this.isPlaying && this.rotate());
     document.getElementById('btnDown').addEventListener('click', () => this.isPlaying && this.drop());
+    const btnHard = document.getElementById('btnHardDrop');
+    if (btnHard) btnHard.addEventListener('click', () => this.isPlaying && this.hardDrop());
+    const btnHold = document.getElementById('btnHold');
+    if (btnHold) btnHold.addEventListener('click', () => this.isPlaying && this.hold());
 
     // 勉強に戻るボタン
     document.getElementById('quitTetrisBtn').addEventListener('click', () => {
@@ -686,6 +713,10 @@ class TetrisGame {
     this.timeLeft = 120; // 毎回2分間のプレイ時間
     this.updateTimerDisplay();
 
+    this.particles = [];
+    this.floatingTexts = [];
+    this.shakeDuration = 0;
+
     this.isPlaying = true;
     this.lastTime = performance.now();
     this.dropCounter = 0;
@@ -701,7 +732,6 @@ class TetrisGame {
     }, 1000);
   }
 
-  // 1秒ごとのタイマー処理
   tickTimer() {
     if (!this.isPlaying) return;
     this.timeLeft--;
@@ -745,7 +775,9 @@ class TetrisGame {
       score: this.score,
       lines: this.lines,
       currentPiece: this.currentPiece,
-      nextPiece: this.nextPiece
+      nextPiece: this.nextPiece,
+      holdPiece: this.holdPiece,
+      canHold: this.canHold
     };
     try {
       localStorage.setItem('saved_tetris_game', JSON.stringify(saveData));
@@ -764,6 +796,8 @@ class TetrisGame {
           this.lines = data.lines || 0;
           this.currentPiece = data.currentPiece || this.generatePiece();
           this.nextPiece = data.nextPiece || this.generatePiece();
+          this.holdPiece = data.holdPiece || null;
+          this.canHold = data.canHold !== undefined ? data.canHold : true;
           this.updateStatsUI();
           this.draw();
           return;
@@ -781,6 +815,10 @@ class TetrisGame {
     this.lines = 0;
     this.currentPiece = this.generatePiece();
     this.nextPiece = this.generatePiece();
+    this.holdPiece = null;
+    this.canHold = true;
+    this.particles = [];
+    this.floatingTexts = [];
     this.updateStatsUI();
     this.draw();
   }
@@ -790,6 +828,7 @@ class TetrisGame {
     const key = pickRandom(keys);
     const template = TETROMINOES[key];
     return {
+      type: key,
       shape: template.shape.map(r => [...r]),
       color: template.color,
       x: Math.floor(TETRIS_COLS / 2) - Math.ceil(template.shape[0].length / 2),
@@ -807,6 +846,9 @@ class TetrisGame {
     if (this.dropCounter > this.dropInterval) {
       this.drop();
     }
+
+    // パーティクル & エフェクトの更新
+    this.updateEffects(delta);
 
     this.draw();
     this.animId = requestAnimationFrame((t) => this.gameLoop(t));
@@ -831,10 +873,25 @@ class TetrisGame {
   }
 
   hardDrop() {
+    // 落下軌跡に光のエフェクト
+    const startY = this.currentPiece.y;
     while (!this.collide()) {
       this.currentPiece.y++;
     }
     this.currentPiece.y--;
+
+    // 着地パーティクル
+    const piece = this.currentPiece;
+    piece.shape.forEach((row, r) => {
+      row.forEach((val, c) => {
+        if (val) {
+          const px = (piece.x + c) * BLOCK_SIZE + BLOCK_SIZE / 2;
+          const py = (piece.y + r) * BLOCK_SIZE + BLOCK_SIZE;
+          this.createSparks(px, py, piece.color, 4);
+        }
+      });
+    });
+
     this.merge();
     this.clearLines();
     this.spawnNext();
@@ -847,7 +904,7 @@ class TetrisGame {
     this.currentPiece.shape = rotated;
 
     if (this.collide()) {
-      // 壁キック簡易処理
+      // 壁キック
       if (this.currentPiece.x < 0) this.currentPiece.x = 0;
       else if (this.currentPiece.x + rotated[0].length > TETRIS_COLS) {
         this.currentPiece.x = TETRIS_COLS - rotated[0].length;
@@ -858,8 +915,36 @@ class TetrisGame {
     }
   }
 
-  collide() {
-    const piece = this.currentPiece;
+  // ホールド機能
+  hold() {
+    if (!this.canHold) return;
+    this.canHold = false;
+
+    if (!this.holdPiece) {
+      this.holdPiece = {
+        type: this.currentPiece.type,
+        shape: TETROMINOES[this.currentPiece.type].shape.map(r => [...r]),
+        color: TETROMINOES[this.currentPiece.type].color
+      };
+      this.spawnNext(false);
+    } else {
+      const tempType = this.currentPiece.type;
+      this.currentPiece = {
+        type: this.holdPiece.type,
+        shape: TETROMINOES[this.holdPiece.type].shape.map(r => [...r]),
+        color: TETROMINOES[this.holdPiece.type].color,
+        x: Math.floor(TETRIS_COLS / 2) - Math.ceil(TETROMINOES[this.holdPiece.type].shape[0].length / 2),
+        y: 0
+      };
+      this.holdPiece = {
+        type: tempType,
+        shape: TETROMINOES[tempType].shape.map(r => [...r]),
+        color: TETROMINOES[tempType].color
+      };
+    }
+  }
+
+  collide(piece = this.currentPiece) {
     for (let r = 0; r < piece.shape.length; r++) {
       for (let c = 0; c < piece.shape[r].length; c++) {
         if (piece.shape[r][c]) {
@@ -871,6 +956,20 @@ class TetrisGame {
       }
     }
     return false;
+  }
+
+  // ゴーストピースのY座標を計算
+  getGhostY() {
+    if (!this.currentPiece) return 0;
+    const ghost = {
+      shape: this.currentPiece.shape,
+      x: this.currentPiece.x,
+      y: this.currentPiece.y
+    };
+    while (!this.collide(ghost)) {
+      ghost.y++;
+    }
+    return ghost.y - 1;
   }
 
   merge() {
@@ -890,8 +989,17 @@ class TetrisGame {
 
   clearLines() {
     let linesCleared = 0;
+    const clearedYRows = [];
+
     for (let r = TETRIS_ROWS - 1; r >= 0; r--) {
       if (this.grid[r].every(cell => cell !== 0)) {
+        clearedYRows.push(r);
+        // 消去された行のセルから火花パーティクル爆発！
+        for (let c = 0; c < TETRIS_COLS; c++) {
+          const cellColor = this.grid[r][c];
+          this.createLineExplosion(c * BLOCK_SIZE + BLOCK_SIZE / 2, r * BLOCK_SIZE + BLOCK_SIZE / 2, cellColor);
+        }
+
         this.grid.splice(r, 1);
         this.grid.unshift(Array(TETRIS_COLS).fill(0));
         linesCleared++;
@@ -901,15 +1009,35 @@ class TetrisGame {
 
     if (linesCleared > 0) {
       const scoreTable = [0, 100, 300, 500, 800];
-      this.score += scoreTable[linesCleared] || (linesCleared * 200);
+      const addedScore = scoreTable[linesCleared] || (linesCleared * 200);
+      this.score += addedScore;
       this.lines += linesCleared;
       this.updateStatsUI();
-      // 速度アップ
-      this.dropInterval = Math.max(200, 800 - this.lines * 15);
+
+      // スクリーンシェイク演出
+      this.triggerScreenShake(linesCleared >= 4 ? 12 : linesCleared * 3);
+
+      // フローティングテキスト演出
+      const textMap = { 1: '+100 SINGLE!', 2: '+300 DOUBLE!!', 3: '+500 TRIPLE!!!', 4: '+800 TETRIS!!!!' };
+      const txt = textMap[linesCleared] || `+${addedScore}`;
+      const color = linesCleared >= 4 ? '#f43f5e' : '#00f0ff';
+      const avgY = clearedYRows.length > 0 ? (clearedYRows[0] * BLOCK_SIZE) : 200;
+      this.floatingTexts.push({
+        x: this.canvas.width / 2,
+        y: avgY,
+        text: txt,
+        color: color,
+        alpha: 1,
+        vy: -1.2,
+        scale: linesCleared >= 4 ? 1.5 : 1.1
+      });
+
+      this.dropInterval = Math.max(180, 800 - this.lines * 15);
     }
   }
 
-  spawnNext() {
+  spawnNext(resetHoldFlag = true) {
+    if (resetHoldFlag) this.canHold = true;
     this.currentPiece = this.nextPiece;
     this.nextPiece = this.generatePiece();
 
@@ -923,19 +1051,100 @@ class TetrisGame {
     }
   }
 
+  // パーティクル生成（ライン消去時）
+  createLineExplosion(x, y, color) {
+    const count = 12;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 5 + 2;
+      this.particles.push({
+        x: x,
+        y: y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1.5,
+        color: color,
+        size: Math.random() * 3 + 2,
+        alpha: 1,
+        life: 1,
+        decay: Math.random() * 0.03 + 0.02
+      });
+    }
+  }
+
+  createSparks(x, y, color, count = 5) {
+    for (let i = 0; i < count; i++) {
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 8,
+        y: y,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -Math.random() * 3 - 1,
+        color: color,
+        size: Math.random() * 2.5 + 1.5,
+        alpha: 1,
+        life: 1,
+        decay: 0.04
+      });
+    }
+  }
+
+  triggerScreenShake(intensity) {
+    this.shakeIntensity = intensity;
+    this.shakeDuration = 12; // 12フレーム
+  }
+
+  updateEffects(delta) {
+    // パーティクルの更新
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15; // 重力
+      p.life -= p.decay;
+      p.alpha = Math.max(0, p.life);
+
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+
+    // フローティングテキストの更新
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.y += ft.vy;
+      ft.alpha -= 0.02;
+      if (ft.alpha <= 0) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
+
+    // スクリーンシェイクの減衰
+    if (this.shakeDuration > 0) {
+      this.shakeDuration--;
+    }
+  }
+
   updateStatsUI() {
     this.scoreEl.textContent = this.score;
     this.linesEl.textContent = this.lines;
   }
 
   draw() {
-    // メイン盤面クリア
-    this.ctx.fillStyle = '#090d16';
+    this.ctx.save();
+
+    // スクリーンシェイク
+    if (this.shakeDuration > 0) {
+      const sx = (Math.random() - 0.5) * this.shakeIntensity;
+      const sy = (Math.random() - 0.5) * this.shakeIntensity;
+      this.ctx.translate(sx, sy);
+    }
+
+    // 背景クリア（暗黒ネオングリッド）
+    this.ctx.fillStyle = '#080c16';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // グリッド線
-    this.ctx.strokeStyle = '#1e293b';
-    this.ctx.lineWidth = 0.5;
+    // グリッド線（ネオン風ダークブルー）
+    this.ctx.strokeStyle = 'rgba(30, 58, 138, 0.25)';
+    this.ctx.lineWidth = 1;
     for (let c = 0; c <= TETRIS_COLS; c++) {
       this.ctx.beginPath();
       this.ctx.moveTo(c * BLOCK_SIZE, 0);
@@ -949,58 +1158,135 @@ class TetrisGame {
       this.ctx.stroke();
     }
 
-    // 配置済みブロック
+    // 1. ゴーストピース（落下予測地点の表示）
+    if (this.currentPiece) {
+      const ghostY = this.getGhostY();
+      this.ctx.save();
+      this.ctx.strokeStyle = this.currentPiece.color;
+      this.ctx.shadowColor = this.currentPiece.color;
+      this.ctx.shadowBlur = 6;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.globalAlpha = 0.35;
+
+      this.currentPiece.shape.forEach((row, r) => {
+        row.forEach((val, c) => {
+          if (val) {
+            const gx = (this.currentPiece.x + c) * BLOCK_SIZE;
+            const gy = (ghostY + r) * BLOCK_SIZE;
+            this.ctx.strokeRect(gx + 2, gy + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+          }
+        });
+      });
+      this.ctx.restore();
+    }
+
+    // 2. 配置済みブロックのネオン描画
     for (let r = 0; r < TETRIS_ROWS; r++) {
       for (let c = 0; c < TETRIS_COLS; c++) {
         if (this.grid[r][c]) {
-          this.drawBlock(this.ctx, c * BLOCK_SIZE, r * BLOCK_SIZE, this.grid[r][c]);
+          this.drawNeonBlock(this.ctx, c * BLOCK_SIZE, r * BLOCK_SIZE, this.grid[r][c]);
         }
       }
     }
 
-    // 落下中ピース
+    // 3. 落下中ピースのネオン描画
     if (this.currentPiece) {
       this.currentPiece.shape.forEach((row, r) => {
         row.forEach((val, c) => {
           if (val) {
             const x = (this.currentPiece.x + c) * BLOCK_SIZE;
             const y = (this.currentPiece.y + r) * BLOCK_SIZE;
-            this.drawBlock(this.ctx, x, y, this.currentPiece.color);
+            this.drawNeonBlock(this.ctx, x, y, this.currentPiece.color);
           }
         });
       });
     }
 
+    // 4. パーティクルの描画（火花・光の粒子）
+    this.ctx.save();
+    this.particles.forEach(p => {
+      this.ctx.globalAlpha = p.alpha;
+      this.ctx.fillStyle = p.color;
+      this.ctx.shadowColor = p.color;
+      this.ctx.shadowBlur = 8;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+    this.ctx.restore();
+
+    // 5. フローティングテキストの描画
+    this.floatingTexts.forEach(ft => {
+      this.ctx.save();
+      this.ctx.globalAlpha = ft.alpha;
+      this.ctx.font = `900 ${Math.round(18 * ft.scale)}px sans-serif`;
+      this.ctx.fillStyle = ft.color;
+      this.ctx.shadowColor = ft.color;
+      this.ctx.shadowBlur = 12;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(ft.text, ft.x, ft.y);
+      this.ctx.restore();
+    });
+
+    this.ctx.restore();
+
     // NEXTミノ描画
-    this.nextCtx.fillStyle = '#090d16';
-    this.nextCtx.fillRect(0, 0, this.nextCanvas.width, this.nextCanvas.height);
-    if (this.nextPiece) {
-      const p = this.nextPiece;
-      const bSize = 16;
-      const offX = (this.nextCanvas.width - p.shape[0].length * bSize) / 2;
-      const offY = (this.nextCanvas.height - p.shape.length * bSize) / 2;
-      p.shape.forEach((row, r) => {
-        row.forEach((val, c) => {
-          if (val) {
-            this.drawBlock(this.nextCtx, offX + c * bSize, offY + r * bSize, p.color, bSize);
-          }
-        });
-      });
+    this.drawMiniPiece(this.nextCtx, this.nextCanvas, this.nextPiece);
+
+    // HOLDミノ描画
+    if (this.holdCtx && this.holdCanvas) {
+      this.drawMiniPiece(this.holdCtx, this.holdCanvas, this.holdPiece, !this.canHold);
     }
   }
 
-  drawBlock(context, x, y, color, size = BLOCK_SIZE) {
+  // ネオンブロックの精密描画
+  drawNeonBlock(context, x, y, color, size = BLOCK_SIZE) {
+    context.save();
+    context.shadowColor = color;
+    context.shadowBlur = 8;
+
+    // 本体ベース
     context.fillStyle = color;
     context.fillRect(x + 1, y + 1, size - 2, size - 2);
 
-    // ぷっくり立体感ハイライト
-    context.fillStyle = 'rgba(255, 255, 255, 0.35)';
-    context.fillRect(x + 1, y + 1, size - 2, 3);
-    context.fillRect(x + 1, y + 1, 3, size - 2);
+    // 内側グラデーション（ふっくら立体光）
+    const grad = context.createLinearGradient(x, y, x + size, y + size);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+    context.fillStyle = grad;
+    context.fillRect(x + 1, y + 1, size - 2, size - 2);
 
-    context.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    context.fillRect(x + size - 4, y + 1, 3, size - 2);
-    context.fillRect(x + 1, y + size - 4, size - 2, 3);
+    // ネオン発光枠
+    context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    context.lineWidth = 1;
+    context.strokeRect(x + 2, y + 2, size - 4, size - 4);
+
+    context.restore();
+  }
+
+  // ミニCanvas（NEXT / HOLD）描画
+  drawMiniPiece(context, canvas, piece, isLocked = false) {
+    context.fillStyle = '#080c16';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (piece) {
+      const bSize = 15;
+      const offX = (canvas.width - piece.shape[0].length * bSize) / 2;
+      const offY = (canvas.height - piece.shape.length * bSize) / 2;
+
+      context.save();
+      if (isLocked) context.globalAlpha = 0.4;
+
+      piece.shape.forEach((row, r) => {
+        row.forEach((val, c) => {
+          if (val) {
+            this.drawNeonBlock(context, offX + c * bSize, offY + r * bSize, piece.color, bSize);
+          }
+        });
+      });
+      context.restore();
+    }
   }
 }
 

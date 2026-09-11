@@ -144,8 +144,12 @@
           </div>
         </div>
 
-        <!-- サイドパネル（NEXTミノ & 操作ガイド） -->
+        <!-- サイドパネル（HOLD, NEXTミノ & 操作ガイド） -->
         <div class="tetris-side">
+          <div class="side-box">
+            <div class="side-title">キープ (HOLD)</div>
+            <canvas id="holdCanvas" width="80" height="80"></canvas>
+          </div>
           <div class="side-box">
             <div class="side-title">つぎのブロック</div>
             <canvas id="nextCanvas" width="80" height="80"></canvas>
@@ -153,8 +157,10 @@
           <div class="side-box pc-guide">
             <div class="side-title">PC操作</div>
             <p>⬅️ ➡️ : 移動</p>
-            <p>⬆️ / スペース : 回転</p>
-            <p>⬇️ : スピード落下</p>
+            <p>⬆️ : 回転</p>
+            <p>⬇️ : 下へ</p>
+            <p>スペース : 即落下⚡</p>
+            <p>C : キープ(HOLD)</p>
           </div>
         </div>
       </div>
@@ -164,10 +170,12 @@
         <div class="dpad-left">
           <button class="touch-btn" id="btnLeft">◀</button>
           <button class="touch-btn" id="btnRight">▶</button>
+          <button class="touch-btn" id="btnHold">📦 キープ</button>
         </div>
         <div class="dpad-right">
           <button class="touch-btn btn-action" id="btnRotate">🔄 まわす</button>
           <button class="touch-btn btn-action" id="btnDown">⬇️ おとす</button>
+          <button class="touch-btn btn-harddrop" id="btnHardDrop">⚡ ドカン！</button>
         </div>
       </div>
     </div>
