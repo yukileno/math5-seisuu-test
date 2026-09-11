@@ -1335,10 +1335,11 @@ class MathDrillApp {
     this.lastQuestionKey = null;
     this.isAnswered = false;
 
-    // 成績データ
+    // 成績データ（本体に記録されたデータを復元）
     this.combo = 0;
     this.totalSolved = 0;
     this.totalCorrect = 0;
+    this.loadSavedStats();
 
     // DOM要素
     this.comboEl = document.getElementById('comboCount');
@@ -1373,6 +1374,38 @@ class MathDrillApp {
     this.initEvents();
     this.updateStats();
     this.loadNextQuestion();
+
+    // スリープ復帰時、既に10問正解に達していればテトリス解放モーダルを表示
+    if (this.combo >= 10) {
+      setTimeout(() => {
+        this.tetrisUnlockModal.style.display = 'flex';
+      }, 400);
+    }
+  }
+
+  // 端末（LocalStorage）から成績・連続正解数を読み込み
+  loadSavedStats() {
+    try {
+      const raw = localStorage.getItem('math_drill_stats');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (typeof data.combo === 'number') this.combo = Math.max(0, data.combo);
+        if (typeof data.totalSolved === 'number') this.totalSolved = Math.max(0, data.totalSolved);
+        if (typeof data.totalCorrect === 'number') this.totalCorrect = Math.max(0, data.totalCorrect);
+      }
+    } catch (e) {}
+  }
+
+  // 端末（LocalStorage）へ成績・連続正解数を確実に保存
+  saveStats() {
+    try {
+      const stats = {
+        combo: this.combo,
+        totalSolved: this.totalSolved,
+        totalCorrect: this.totalCorrect
+      };
+      localStorage.setItem('math_drill_stats', JSON.stringify(stats));
+    } catch (e) {}
   }
 
   initEvents() {
@@ -1416,6 +1449,19 @@ class MathDrillApp {
           this.loadNextQuestion();
         }
       }
+    });
+
+    // スリープやタブ切り替え、画面オフ時に確実に保存
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.saveStats();
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      this.saveStats();
+    });
+    window.addEventListener('beforeunload', () => {
+      this.saveStats();
     });
   }
 
@@ -1652,6 +1698,9 @@ class MathDrillApp {
     this.solvedEl.textContent = this.totalSolved;
     const rate = this.totalSolved === 0 ? 100 : Math.round((this.totalCorrect / this.totalSolved) * 100);
     this.rateEl.textContent = rate;
+
+    // 端末（本体）に常に最新の成績・コンボ数を自動記録
+    this.saveStats();
   }
 }
 
