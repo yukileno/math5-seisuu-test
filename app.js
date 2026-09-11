@@ -42,11 +42,6 @@ function getCommonDivisors3(a, b, c) {
   return getDivisors(g);
 }
 
-// ランダム整数（min以上max以下）
-function randInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
 // 配列からランダムに1つ選択
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -210,7 +205,7 @@ const generators = {
         }
       ],
       correctText: `偶数: ${evens.sort((a,b)=>a-b).join('、 ')} / 奇数: ${odds.sort((a,b)=>a-b).join('、 ')}`,
-      explanation: `【考え方】\n・一の位が 0, 2, 4, 6, 8 の数は偶数です。※「0」は2でわり切れるので偶数です！\n　偶数：${evens.sort((a,b)=>a-b).join('、 ')}\n・一の位が 1, 3, 5, 7, 9 の数は奇数です。\n　奇数：${odds.sort((a,b)=>a-b).join('、 ')}`
+      explanation: `【考え方】\n・一の位が 0, 2, 4, 6, 8 の数は偶数です。※「0」は偶数です！\n　偶数：${evens.sort((a,b)=>a-b).join('、 ')}\n・一の位が 1, 3, 5, 7, 9 の数は奇数です。\n　奇数：${odds.sort((a,b)=>a-b).join('、 ')}`
     };
   },
 
@@ -583,7 +578,422 @@ const generators = {
 };
 
 // ==========================================
-// アプリケーション状態とコントローラ
+// テトリスゲームエンジン (状態セーブ・復元・2分タイマー)
+// ==========================================
+
+const TETRIS_COLS = 10;
+const TETRIS_ROWS = 20;
+const BLOCK_SIZE = 20;
+
+const TETROMINOES = {
+  I: { shape: [[1, 1, 1, 1]], color: '#06b6d4' },
+  O: { shape: [[1, 1], [1, 1]], color: '#eab308' },
+  T: { shape: [[0, 1, 0], [1, 1, 1]], color: '#a855f7' },
+  S: { shape: [[0, 1, 1], [1, 1, 0]], color: '#22c55e' },
+  Z: { shape: [[1, 1, 0], [0, 1, 1]], color: '#ef4444' },
+  J: { shape: [[1, 0, 0], [1, 1, 1]], color: '#3b82f6' },
+  L: { shape: [[0, 0, 1], [1, 1, 1]], color: '#f97316' }
+};
+
+class TetrisGame {
+  constructor(onFinishCallback) {
+    this.onFinish = onFinishCallback;
+    this.canvas = document.getElementById('tetrisCanvas');
+    this.ctx = this.canvas.getContext('2d');
+
+    this.nextCanvas = document.getElementById('nextCanvas');
+    this.nextCtx = this.nextCanvas.getContext('2d');
+
+    this.timerEl = document.getElementById('tetrisTimer');
+    this.scoreEl = document.getElementById('tetrisScore');
+    this.linesEl = document.getElementById('tetrisLines');
+    this.gameOverOverlay = document.getElementById('gameOverOverlay');
+
+    this.modal = document.getElementById('tetrisGameModal');
+    this.timeUpModal = document.getElementById('timeUpModal');
+    this.finalScoreEl = document.getElementById('finalScore');
+
+    this.grid = this.createGrid();
+    this.score = 0;
+    this.lines = 0;
+    this.timeLeft = 120; // 2分 (120秒)
+
+    this.currentPiece = null;
+    this.nextPiece = null;
+
+    this.dropCounter = 0;
+    this.dropInterval = 800; // ms
+    this.lastTime = 0;
+    this.animId = null;
+    this.timerId = null;
+    this.isPlaying = false;
+
+    this.initEvents();
+  }
+
+  createGrid() {
+    return Array.from({ length: TETRIS_ROWS }, () => Array(TETRIS_COLS).fill(0));
+  }
+
+  initEvents() {
+    // キーボード操作
+    window.addEventListener('keydown', (e) => {
+      if (!this.isPlaying) return;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
+      if (e.key === 'ArrowLeft') this.move(-1);
+      else if (e.key === 'ArrowRight') this.move(1);
+      else if (e.key === 'ArrowDown') this.drop();
+      else if (e.key === 'ArrowUp' || e.key === ' ') this.rotate();
+    });
+
+    // タッチ操作ボタン
+    document.getElementById('btnLeft').addEventListener('click', () => this.isPlaying && this.move(-1));
+    document.getElementById('btnRight').addEventListener('click', () => this.isPlaying && this.move(1));
+    document.getElementById('btnRotate').addEventListener('click', () => this.isPlaying && this.rotate());
+    document.getElementById('btnDown').addEventListener('click', () => this.isPlaying && this.drop());
+
+    // 勉強に戻るボタン
+    document.getElementById('quitTetrisBtn').addEventListener('click', () => {
+      this.pauseAndSave();
+      this.closeGameModal();
+    });
+
+    // ゲームオーバー後のリトライ
+    document.getElementById('retryTetrisBtn').addEventListener('click', () => {
+      this.resetGame();
+      this.gameOverOverlay.style.display = 'none';
+      this.isPlaying = true;
+    });
+
+    // タイムアップ後の算数に戻るボタン
+    document.getElementById('backToMathBtn').addEventListener('click', () => {
+      this.timeUpModal.style.display = 'none';
+      this.closeGameModal();
+    });
+  }
+
+  // ゲーム開始（状態復元または新規）
+  start() {
+    this.modal.style.display = 'flex';
+    this.gameOverOverlay.style.display = 'none';
+    this.timeUpModal.style.display = 'none';
+
+    this.loadSavedState();
+
+    this.timeLeft = 120; // 毎回2分間のプレイ時間
+    this.updateTimerDisplay();
+
+    this.isPlaying = true;
+    this.lastTime = performance.now();
+    this.dropCounter = 0;
+
+    // ゲームループ開始
+    cancelAnimationFrame(this.animId);
+    this.gameLoop(performance.now());
+
+    // 2分間タイマー開始
+    clearInterval(this.timerId);
+    this.timerId = setInterval(() => {
+      this.tickTimer();
+    }, 1000);
+  }
+
+  // 1秒ごとのタイマー処理
+  tickTimer() {
+    if (!this.isPlaying) return;
+    this.timeLeft--;
+    this.updateTimerDisplay();
+
+    if (this.timeLeft <= 0) {
+      // 2分経過！一時停止してセーブ
+      this.pauseAndSave();
+      this.showTimeUp();
+    }
+  }
+
+  updateTimerDisplay() {
+    const mins = Math.floor(this.timeLeft / 60);
+    const secs = this.timeLeft % 60;
+    this.timerEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  showTimeUp() {
+    this.isPlaying = false;
+    this.finalScoreEl.textContent = this.score;
+    this.timeUpModal.style.display = 'flex';
+  }
+
+  closeGameModal() {
+    this.isPlaying = false;
+    cancelAnimationFrame(this.animId);
+    clearInterval(this.timerId);
+    this.modal.style.display = 'none';
+    if (this.onFinish) this.onFinish();
+  }
+
+  // ゲーム状態の保存（LocalStorage）
+  pauseAndSave() {
+    this.isPlaying = false;
+    cancelAnimationFrame(this.animId);
+    clearInterval(this.timerId);
+
+    const saveData = {
+      grid: this.grid,
+      score: this.score,
+      lines: this.lines,
+      currentPiece: this.currentPiece,
+      nextPiece: this.nextPiece
+    };
+    try {
+      localStorage.setItem('saved_tetris_game', JSON.stringify(saveData));
+    } catch (e) {}
+  }
+
+  // 保存状態の復元
+  loadSavedState() {
+    try {
+      const raw = localStorage.getItem('saved_tetris_game');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.grid && data.grid.length === TETRIS_ROWS) {
+          this.grid = data.grid;
+          this.score = data.score || 0;
+          this.lines = data.lines || 0;
+          this.currentPiece = data.currentPiece || this.generatePiece();
+          this.nextPiece = data.nextPiece || this.generatePiece();
+          this.updateStatsUI();
+          this.draw();
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // セーブがなければ新規初期化
+    this.resetGame();
+  }
+
+  resetGame() {
+    this.grid = this.createGrid();
+    this.score = 0;
+    this.lines = 0;
+    this.currentPiece = this.generatePiece();
+    this.nextPiece = this.generatePiece();
+    this.updateStatsUI();
+    this.draw();
+  }
+
+  generatePiece() {
+    const keys = Object.keys(TETROMINOES);
+    const key = pickRandom(keys);
+    const template = TETROMINOES[key];
+    return {
+      shape: template.shape.map(r => [...r]),
+      color: template.color,
+      x: Math.floor(TETRIS_COLS / 2) - Math.ceil(template.shape[0].length / 2),
+      y: 0
+    };
+  }
+
+  gameLoop(time = 0) {
+    if (!this.isPlaying) return;
+
+    const delta = time - this.lastTime;
+    this.lastTime = time;
+    this.dropCounter += delta;
+
+    if (this.dropCounter > this.dropInterval) {
+      this.drop();
+    }
+
+    this.draw();
+    this.animId = requestAnimationFrame((t) => this.gameLoop(t));
+  }
+
+  move(dir) {
+    this.currentPiece.x += dir;
+    if (this.collide()) {
+      this.currentPiece.x -= dir;
+    }
+  }
+
+  drop() {
+    this.currentPiece.y++;
+    if (this.collide()) {
+      this.currentPiece.y--;
+      this.merge();
+      this.clearLines();
+      this.spawnNext();
+    }
+    this.dropCounter = 0;
+  }
+
+  rotate() {
+    const original = this.currentPiece.shape;
+    const rotated = original[0].map((_, i) => original.map(row => row[i]).reverse());
+    this.currentPiece.shape = rotated;
+
+    if (this.collide()) {
+      // 壁キック簡易処理
+      if (this.currentPiece.x < 0) this.currentPiece.x = 0;
+      else if (this.currentPiece.x + rotated[0].length > TETRIS_COLS) {
+        this.currentPiece.x = TETRIS_COLS - rotated[0].length;
+      }
+      if (this.collide()) {
+        this.currentPiece.shape = original;
+      }
+    }
+  }
+
+  collide() {
+    const piece = this.currentPiece;
+    for (let r = 0; r < piece.shape.length; r++) {
+      for (let c = 0; c < piece.shape[r].length; c++) {
+        if (piece.shape[r][c]) {
+          const newX = piece.x + c;
+          const newY = piece.y + r;
+          if (newX < 0 || newX >= TETRIS_COLS || newY >= TETRIS_ROWS) return true;
+          if (newY >= 0 && this.grid[newY][newX]) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  merge() {
+    const piece = this.currentPiece;
+    piece.shape.forEach((row, r) => {
+      row.forEach((val, c) => {
+        if (val) {
+          const y = piece.y + r;
+          const x = piece.x + c;
+          if (y >= 0 && y < TETRIS_ROWS && x >= 0 && x < TETRIS_COLS) {
+            this.grid[y][x] = piece.color;
+          }
+        }
+      });
+    });
+  }
+
+  clearLines() {
+    let linesCleared = 0;
+    for (let r = TETRIS_ROWS - 1; r >= 0; r--) {
+      if (this.grid[r].every(cell => cell !== 0)) {
+        this.grid.splice(r, 1);
+        this.grid.unshift(Array(TETRIS_COLS).fill(0));
+        linesCleared++;
+        r++; // 再検査
+      }
+    }
+
+    if (linesCleared > 0) {
+      const scoreTable = [0, 100, 300, 500, 800];
+      this.score += scoreTable[linesCleared] || (linesCleared * 200);
+      this.lines += linesCleared;
+      this.updateStatsUI();
+      // 速度アップ
+      this.dropInterval = Math.max(200, 800 - this.lines * 15);
+    }
+  }
+
+  spawnNext() {
+    this.currentPiece = this.nextPiece;
+    this.nextPiece = this.generatePiece();
+
+    if (this.collide()) {
+      // ゲームオーバー
+      this.isPlaying = false;
+      this.gameOverOverlay.style.display = 'flex';
+      try {
+        localStorage.removeItem('saved_tetris_game');
+      } catch (e) {}
+    }
+  }
+
+  updateStatsUI() {
+    this.scoreEl.textContent = this.score;
+    this.linesEl.textContent = this.lines;
+  }
+
+  draw() {
+    // メイン盤面クリア
+    this.ctx.fillStyle = '#090d16';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // グリッド線
+    this.ctx.strokeStyle = '#1e293b';
+    this.ctx.lineWidth = 0.5;
+    for (let c = 0; c <= TETRIS_COLS; c++) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(c * BLOCK_SIZE, 0);
+      this.ctx.lineTo(c * BLOCK_SIZE, TETRIS_ROWS * BLOCK_SIZE);
+      this.ctx.stroke();
+    }
+    for (let r = 0; r <= TETRIS_ROWS; r++) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, r * BLOCK_SIZE);
+      this.ctx.lineTo(TETRIS_COLS * BLOCK_SIZE, r * BLOCK_SIZE);
+      this.ctx.stroke();
+    }
+
+    // 配置済みブロック
+    for (let r = 0; r < TETRIS_ROWS; r++) {
+      for (let c = 0; c < TETRIS_COLS; c++) {
+        if (this.grid[r][c]) {
+          this.drawBlock(this.ctx, c * BLOCK_SIZE, r * BLOCK_SIZE, this.grid[r][c]);
+        }
+      }
+    }
+
+    // 落下中ピース
+    if (this.currentPiece) {
+      this.currentPiece.shape.forEach((row, r) => {
+        row.forEach((val, c) => {
+          if (val) {
+            const x = (this.currentPiece.x + c) * BLOCK_SIZE;
+            const y = (this.currentPiece.y + r) * BLOCK_SIZE;
+            this.drawBlock(this.ctx, x, y, this.currentPiece.color);
+          }
+        });
+      });
+    }
+
+    // NEXTミノ描画
+    this.nextCtx.fillStyle = '#090d16';
+    this.nextCtx.fillRect(0, 0, this.nextCanvas.width, this.nextCanvas.height);
+    if (this.nextPiece) {
+      const p = this.nextPiece;
+      const bSize = 16;
+      const offX = (this.nextCanvas.width - p.shape[0].length * bSize) / 2;
+      const offY = (this.nextCanvas.height - p.shape.length * bSize) / 2;
+      p.shape.forEach((row, r) => {
+        row.forEach((val, c) => {
+          if (val) {
+            this.drawBlock(this.nextCtx, offX + c * bSize, offY + r * bSize, p.color, bSize);
+          }
+        });
+      });
+    }
+  }
+
+  drawBlock(context, x, y, color, size = BLOCK_SIZE) {
+    context.fillStyle = color;
+    context.fillRect(x + 1, y + 1, size - 2, size - 2);
+
+    // ぷっくり立体感ハイライト
+    context.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    context.fillRect(x + 1, y + 1, size - 2, 3);
+    context.fillRect(x + 1, y + 1, 3, size - 2);
+
+    context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    context.fillRect(x + size - 4, y + 1, 3, size - 2);
+    context.fillRect(x + 1, y + size - 4, size - 2, 3);
+  }
+}
+
+// ==========================================
+// 算数ドリルアプリケーションコントローラ
 // ==========================================
 
 class MathDrillApp {
@@ -599,6 +1009,7 @@ class MathDrillApp {
 
     // DOM要素
     this.comboEl = document.getElementById('comboCount');
+    this.tetrisHintEl = document.getElementById('tetrisHint');
     this.solvedEl = document.getElementById('totalSolved');
     this.rateEl = document.getElementById('correctRate');
 
@@ -617,14 +1028,26 @@ class MathDrillApp {
     this.explanationContent = document.getElementById('explanationContent');
     this.nextBtn = document.getElementById('nextBtn');
 
+    // テトリスモーダル要素
+    this.tetrisUnlockModal = document.getElementById('tetrisUnlockModal');
+    this.startTetrisBtn = document.getElementById('startTetrisBtn');
+    this.skipTetrisBtn = document.getElementById('skipTetrisBtn');
+
+    // テトリスゲーム初期化（終了時に呼ばれるコールバックを渡す）
+    this.tetris = new TetrisGame(() => {
+      // テトリス終了後、次の問題へ
+      this.loadNextQuestion();
+    });
+
     this.initEvents();
+    this.updateStats();
     this.loadNextQuestion();
   }
 
   initEvents() {
     // カテゴリー切り替え
     document.querySelectorAll('.cat-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', () => {
         document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.currentCategory = btn.dataset.category;
@@ -645,10 +1068,29 @@ class MathDrillApp {
       this.loadNextQuestion();
     });
 
+    // テトリス開始ボタン
+    this.startTetrisBtn.addEventListener('click', () => {
+      this.tetrisUnlockModal.style.display = 'none';
+      this.combo = 0; // 次の10問に向けてリセット
+      this.updateStats();
+      this.tetris.start();
+    });
+
+    // テトリススキップボタン（今は勉強を続ける）
+    this.skipTetrisBtn.addEventListener('click', () => {
+      this.tetrisUnlockModal.style.display = 'none';
+      this.combo = 0;
+      this.updateStats();
+      this.loadNextQuestion();
+    });
+
     // キーボード操作（Enterでこたえあわせ／次へ）
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        if (this.isAnswered) {
+        if (this.tetrisUnlockModal.style.display === 'flex') {
+          e.preventDefault();
+          this.startTetrisBtn.click();
+        } else if (this.isAnswered && !this.tetris.isPlaying) {
           e.preventDefault();
           this.loadNextQuestion();
         }
@@ -656,7 +1098,6 @@ class MathDrillApp {
     });
   }
 
-  // カテゴリに応じたジェネレータリストを取得
   getGeneratorsForCurrentCategory() {
     const keys = Object.keys(generators);
     if (this.currentCategory === 'all') {
@@ -668,16 +1109,12 @@ class MathDrillApp {
     });
   }
 
-  // 次の問題を読み込み
   loadNextQuestion() {
     this.isAnswered = false;
-
-    // 前回の結果表示をリセット
     this.resultContainer.style.display = 'none';
     this.submitBtn.disabled = false;
     this.submitBtn.style.display = 'inline-flex';
 
-    // カテゴリからランダムに問題生成
     const availableKeys = this.getGeneratorsForCurrentCategory();
     const chosenKey = pickRandom(availableKeys);
     this.currentQuestion = generators[chosenKey]();
@@ -685,7 +1122,6 @@ class MathDrillApp {
     this.renderQuestion();
   }
 
-  // 問題を画面に描画
   renderQuestion() {
     const q = this.currentQuestion;
 
@@ -693,7 +1129,6 @@ class MathDrillApp {
     this.skillBadge.textContent = q.skill;
     this.instructionEl.textContent = q.instruction;
 
-    // サブテキストまたは数字チップ
     if (q.subtext) {
       this.subtextEl.style.display = 'block';
       this.subtextEl.textContent = q.subtext;
@@ -701,10 +1136,8 @@ class MathDrillApp {
       this.subtextEl.style.display = 'none';
     }
 
-    // 入力フォーム作成
     this.inputContainer.innerHTML = '';
 
-    // チップがある場合（偶数・奇数の分類など）
     if (q.chips) {
       const chipBox = document.createElement('div');
       chipBox.className = 'number-chip-container';
@@ -717,7 +1150,6 @@ class MathDrillApp {
       this.inputContainer.appendChild(chipBox);
     }
 
-    // 行ごとに描画
     const allInputs = [];
 
     q.rows.forEach(row => {
@@ -773,7 +1205,6 @@ class MathDrillApp {
       this.inputContainer.appendChild(rowDiv);
     });
 
-    // 入力欄間の自動フォーカス移動（Enterキーで次へ）
     allInputs.forEach((inp, idx) => {
       inp.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -785,13 +1216,11 @@ class MathDrillApp {
       });
     });
 
-    // 最初の入力欄にフォーカス
     setTimeout(() => {
       if (allInputs.length > 0) allInputs[0].focus();
     }, 50);
   }
 
-  // 解答チェック
   checkAnswer() {
     this.isAnswered = true;
     const q = this.currentQuestion;
@@ -799,7 +1228,6 @@ class MathDrillApp {
 
     q.rows.forEach(row => {
       if (row.isMultiSet) {
-        // 順不同の数値セット（例: 偶数・奇数の枠、約数すべての枠）
         const userVals = [];
         row.boxes.forEach(box => {
           const el = document.getElementById(`box_${box.id}`);
@@ -829,7 +1257,6 @@ class MathDrillApp {
         if (!isMatch) allCorrect = false;
 
       } else {
-        // 各ボックス個別の判定
         row.boxes.forEach(box => {
           const el = document.getElementById(`box_${box.id}`);
           const val = el ? el.value : '';
@@ -858,7 +1285,6 @@ class MathDrillApp {
       }
     });
 
-    // スコア・統計の更新
     this.totalSolved++;
     if (allCorrect) {
       this.totalCorrect++;
@@ -868,8 +1294,14 @@ class MathDrillApp {
     }
     this.updateStats();
 
-    // 結果表示の更新
     this.showResult(allCorrect, q.correctText, q.explanation);
+
+    // 10問連続正解達成！
+    if (this.combo >= 10) {
+      setTimeout(() => {
+        this.tetrisUnlockModal.style.display = 'flex';
+      }, 700);
+    }
   }
 
   showResult(isCorrect, answerStr, explanation) {
@@ -879,9 +1311,9 @@ class MathDrillApp {
     if (isCorrect) {
       this.resultBanner.className = 'result-banner correct';
       this.resultIcon.textContent = '💮';
-      this.resultText.textContent = this.combo >= 3 
-        ? `大正解！すごい！ ${this.combo}問連続正解中🔥` 
-        : 'せいかい！たいへんよくできました！';
+      this.resultText.textContent = this.combo >= 10
+        ? `🎉 10問連続正解達成！！テトリス解放！！`
+        : `せいかい！ ${this.combo}問れんぞく正解！`;
     } else {
       this.resultBanner.className = 'result-banner incorrect';
       this.resultIcon.textContent = '❌';
@@ -891,12 +1323,18 @@ class MathDrillApp {
     this.correctAnswerContent.textContent = answerStr;
     this.explanationContent.textContent = explanation;
 
-    // 次へボタンにフォーカス
     this.nextBtn.focus();
   }
 
   updateStats() {
     this.comboEl.textContent = this.combo;
+    const remaining = 10 - this.combo;
+    if (remaining > 0) {
+      this.tetrisHintEl.textContent = `あと${remaining}問でテトリス🎮`;
+    } else {
+      this.tetrisHintEl.textContent = `テトリス解放！🎉`;
+    }
+
     this.solvedEl.textContent = this.totalSolved;
     const rate = this.totalSolved === 0 ? 100 : Math.round((this.totalCorrect / this.totalSolved) * 100);
     this.rateEl.textContent = rate;

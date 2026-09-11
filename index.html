@@ -21,8 +21,11 @@
         <div class="stats-bar">
           <div class="stat-item combo">
             <span class="stat-label">れんぞく正解</span>
-            <span class="stat-val" id="comboCount">0</span>
-            <span class="stat-unit">問</span>
+            <div class="combo-num-wrap">
+              <span class="stat-val" id="comboCount">0</span>
+              <span class="stat-unit">/ 10問</span>
+            </div>
+            <span class="tetris-hint" id="tetrisHint">あと10問でテトリス🎮</span>
           </div>
           <div class="stat-item total">
             <span class="stat-label">といた数</span>
@@ -108,6 +111,87 @@
     </main>
 
 
+  </div>
+
+  <!-- 10問連続正解 祝福モーダル -->
+  <div class="modal-overlay" id="tetrisUnlockModal" style="display: none;">
+    <div class="modal-card unlock-card">
+      <div class="unlock-icon">🎉 🕹️ 👑</div>
+      <h2>10問連続正解！！</h2>
+      <p class="unlock-desc">すごい！全問正解パワー全開！<br>ごほうびの<strong>「2分間テトリス」</strong>であそべるよ！</p>
+      <button class="btn btn-tetris-start" id="startTetrisBtn">
+        <span>🎮 テトリスをスタート！（2分間）</span>
+      </button>
+      <button class="btn-text-only" id="skipTetrisBtn">いまは勉強をつづける ✏️</button>
+    </div>
+  </div>
+
+  <!-- テトリスゲーム画面モーダル -->
+  <div class="modal-overlay tetris-bg" id="tetrisGameModal" style="display: none;">
+    <div class="tetris-container">
+      <!-- 上部情報バー -->
+      <div class="tetris-header">
+        <div class="tetris-timer-box">
+          <span class="timer-icon">⏳</span>
+          <span class="timer-label">のこり時間</span>
+          <span class="timer-val" id="tetrisTimer">02:00</span>
+        </div>
+        <div class="tetris-stats">
+          <div class="t-stat">スコア: <span id="tetrisScore">0</span></div>
+          <div class="t-stat">ライン: <span id="tetrisLines">0</span></div>
+        </div>
+        <button class="btn btn-close-game" id="quitTetrisBtn">勉強にもどる ✏️</button>
+      </div>
+
+      <!-- ゲームメインエリア -->
+      <div class="tetris-playfield">
+        <div class="canvas-wrap">
+          <canvas id="tetrisCanvas" width="240" height="480"></canvas>
+          <div class="game-over-overlay" id="gameOverOverlay" style="display: none;">
+            <div class="go-text">ゲームオーバー！</div>
+            <button class="btn btn-primary" id="retryTetrisBtn">もう一度あそぶ</button>
+          </div>
+        </div>
+
+        <!-- サイドパネル（NEXTミノ & 操作ガイド） -->
+        <div class="tetris-side">
+          <div class="side-box">
+            <div class="side-title">つぎのブロック</div>
+            <canvas id="nextCanvas" width="80" height="80"></canvas>
+          </div>
+          <div class="side-box pc-guide">
+            <div class="side-title">PC操作</div>
+            <p>⬅️ ➡️ : 移動</p>
+            <p>⬆️ / スペース : 回転</p>
+            <p>⬇️ : スピード落下</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- モバイル・タブレット用コントローラー -->
+      <div class="tetris-touch-controls">
+        <div class="dpad-left">
+          <button class="touch-btn" id="btnLeft">◀</button>
+          <button class="touch-btn" id="btnRight">▶</button>
+        </div>
+        <div class="dpad-right">
+          <button class="touch-btn btn-action" id="btnRotate">🔄 まわす</button>
+          <button class="touch-btn btn-action" id="btnDown">⬇️ おとす</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- タイムアップモーダル -->
+  <div class="modal-overlay" id="timeUpModal" style="display: none;">
+    <div class="modal-card timeup-card">
+      <div class="timeup-icon">⏰ 🎊</div>
+      <h2>2分間おつかれさま！</h2>
+      <p class="timeup-desc">スコア：<strong id="finalScore">0</strong> 点！<br>リフレッシュできたかな？<br>また10問正解してテトリスであそぼう！</p>
+      <button class="btn btn-primary" id="backToMathBtn">
+        <span>✏️ 算数の勉強にもどる！</span>
+      </button>
+    </div>
   </div>
 
   <script src="app.js"></script>
