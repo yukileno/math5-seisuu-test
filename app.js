@@ -1657,5 +1657,7 @@ class MathDrillApp {
 
 // 起動
 document.addEventListener('DOMContentLoaded', () => {
-  new MathDrillApp();
+  if (document.getElementById('questionInstruction')) {
+    new MathDrillApp();
+  }
 });
