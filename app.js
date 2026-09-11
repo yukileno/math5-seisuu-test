@@ -645,7 +645,8 @@ class TetrisGame {
       if (e.key === 'ArrowLeft') this.move(-1);
       else if (e.key === 'ArrowRight') this.move(1);
       else if (e.key === 'ArrowDown') this.drop();
-      else if (e.key === 'ArrowUp' || e.key === ' ') this.rotate();
+      else if (e.key === 'ArrowUp') this.rotate();
+      else if (e.key === ' ') this.hardDrop();
     });
 
     // タッチ操作ボタン
@@ -826,6 +827,17 @@ class TetrisGame {
       this.clearLines();
       this.spawnNext();
     }
+    this.dropCounter = 0;
+  }
+
+  hardDrop() {
+    while (!this.collide()) {
+      this.currentPiece.y++;
+    }
+    this.currentPiece.y--;
+    this.merge();
+    this.clearLines();
+    this.spawnNext();
     this.dropCounter = 0;
   }
 
@@ -1071,6 +1083,14 @@ class MathDrillApp {
       this.updateStats();
       this.loadNextQuestion();
     });
+
+    // テトリス動作確認ボタン（即座にテトリスをテストできる）
+    const testBtn = document.getElementById('testTetrisBtn');
+    if (testBtn) {
+      testBtn.addEventListener('click', () => {
+        this.tetris.start();
+      });
+    }
 
     // キーボード操作（Enterでこたえあわせ／次へ）
     window.addEventListener('keydown', (e) => {
